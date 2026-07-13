@@ -1,13 +1,14 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
   type RefObject
 } from 'react'
 import type { SortKey } from '@shared/types'
+import DropdownMenu from '@/components/common/DropdownMenu'
 import { Icon } from '@/components/common/Icon'
-import { useClickOutside } from '@/hooks/useClickOutside'
 import { resolvedThemeIsDark, useSettings } from '@/store/settings'
 import { useLibrary } from '@/store/library'
 
@@ -47,8 +48,8 @@ export default function TopBar({ onOpenSettings, searchInputRef }: TopBarProps):
   }, [query])
 
   const [importOpen, setImportOpen] = useState(false)
+  const importBtnRef = useRef<HTMLButtonElement>(null)
   const closeImport = useCallback(() => setImportOpen(false), [])
-  const importRef = useClickOutside<HTMLDivElement>(closeImport)
 
   const isDark = resolvedThemeIsDark(theme)
 
@@ -107,33 +108,30 @@ export default function TopBar({ onOpenSettings, searchInputRef }: TopBarProps):
           </select>
         </label>
 
-        <div className="dropdown" ref={importRef}>
-          <button
-            className="btn btn-primary"
-            disabled={importing}
-            onClick={() => setImportOpen((v) => !v)}
-          >
-            <Icon name="plus" size={15} />
-            导入
-            <Icon name="chevron-down" size={13} />
+        <button
+          ref={importBtnRef}
+          className="btn btn-primary"
+          disabled={importing}
+          onClick={() => setImportOpen((v) => !v)}
+        >
+          <Icon name="plus" size={15} />
+          导入
+          <Icon name="chevron-down" size={13} />
+        </button>
+        <DropdownMenu open={importOpen} anchorRef={importBtnRef} align="right" onClose={closeImport}>
+          <button onClick={() => runImport('folder')}>
+            <Icon name="folder" size={15} />
+            导入文件夹…
           </button>
-          {importOpen && (
-            <div className="dropdown-menu">
-              <button onClick={() => runImport('folder')}>
-                <Icon name="folder" size={15} />
-                导入文件夹…
-              </button>
-              <button onClick={() => runImport('archive')}>
-                <Icon name="archive" size={15} />
-                导入压缩包（ZIP / CBZ）…
-              </button>
-              <button onClick={() => runImport('batch')}>
-                <Icon name="folder-open" size={15} />
-                批量导入子文件夹…
-              </button>
-            </div>
-          )}
-        </div>
+          <button onClick={() => runImport('archive')}>
+            <Icon name="archive" size={15} />
+            导入压缩包（ZIP / CBZ）…
+          </button>
+          <button onClick={() => runImport('batch')}>
+            <Icon name="folder-open" size={15} />
+            批量导入子文件夹…
+          </button>
+        </DropdownMenu>
 
         <button
           className="icon-btn"
