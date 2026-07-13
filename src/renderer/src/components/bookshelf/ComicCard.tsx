@@ -1,7 +1,7 @@
-import { memo, useCallback, useState, type ReactNode } from 'react'
+import { memo, useCallback, useRef, useState, type ReactNode } from 'react'
 import type { Comic } from '@shared/types'
+import DropdownMenu from '@/components/common/DropdownMenu'
 import { Icon } from '@/components/common/Icon'
-import { useClickOutside } from '@/hooks/useClickOutside'
 import { useLibrary } from '@/store/library'
 import { useReader } from '@/store/reader'
 import { coverUrl } from '@/utils/comicUrl'
@@ -17,9 +17,13 @@ interface ComicCardProps {
 function ComicCard({ comic, missing, onDelete }: ComicCardProps): ReactNode {
   const open = useReader((s) => s.open)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuPoint, setMenuPoint] = useState<{ x: number; y: number } | null>(null)
   const [coverFailed, setCoverFailed] = useState(false)
-  const closeMenu = useCallback(() => setMenuOpen(false), [])
-  const menuRef = useClickOutside<HTMLDivElement>(closeMenu)
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false)
+    setMenuPoint(null)
+  }, [])
 
   const percent = readPercent(comic.lastReadAt, comic.lastReadPage, comic.pageCount)
   const finished = percent >= 100
@@ -31,6 +35,7 @@ function ComicCard({ comic, missing, onDelete }: ComicCardProps): ReactNode {
       onClick={() => void open(comic.id)}
       onContextMenu={(e) => {
         e.preventDefault()
+        setMenuPoint({ x: e.clientX, y: e.clientY })
         setMenuOpen(true)
       }}
       title={comic.sourcePath}
@@ -61,55 +66,18 @@ function ComicCard({ comic, missing, onDelete }: ComicCardProps): ReactNode {
           </span>
         </div>
 
-        <div className="card-menu" ref={menuRef} onClick={(e) => e.stopPropagation()}>
+        <div className="card-menu" onClick={(e) => e.stopPropagation()}>
           <button
-            className="icon-btn card-menu-btn"
+            ref={menuBtnRef}
+            className={menuOpen ? 'icon-btn card-menu-btn open' : 'icon-btn card-menu-btn'}
             title="更多操作"
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => {
+              setMenuPoint(null)
+              setMenuOpen((v) => !v)
+            }}
           >
             <Icon name="more" size={16} />
           </button>
-          {menuOpen && (
-            <div className="dropdown-menu" onContextMenu={(e) => e.stopPropagation()}>
-              <button
-                onClick={() => {
-                  closeMenu()
-                  void open(comic.id, { fromStart: true })
-                }}
-              >
-                <Icon name="play" size={14} />
-                从第一页开始
-              </button>
-              <button
-                onClick={() => {
-                  closeMenu()
-                  void useLibrary.getState().rescan(comic.id)
-                }}
-              >
-                <Icon name="refresh" size={14} />
-                重新扫描（刷新页数和封面）
-              </button>
-              <button
-                onClick={() => {
-                  closeMenu()
-                  void window.api.revealComic(comic.id)
-                }}
-              >
-                <Icon name="folder-open" size={14} />
-                打开所在位置
-              </button>
-              <button
-                className="danger"
-                onClick={() => {
-                  closeMenu()
-                  onDelete(comic)
-                }}
-              >
-                <Icon name="trash" size={14} />
-                从书架移除…
-              </button>
-            </div>
-          )}
         </div>
 
         {comic.lastReadAt !== null && (
@@ -118,6 +86,52 @@ function ComicCard({ comic, missing, onDelete }: ComicCardProps): ReactNode {
           </div>
         )}
       </div>
+
+      <DropdownMenu
+        open={menuOpen}
+        anchorRef={menuBtnRef}
+        point={menuPoint}
+        align={menuPoint ? 'left' : 'right'}
+        onClose={closeMenu}
+      >
+        <button
+          onClick={() => {
+            closeMenu()
+            void open(comic.id, { fromStart: true })
+          }}
+        >
+          <Icon name="play" size={14} />
+          从第一页开始
+        </button>
+        <button
+          onClick={() => {
+            closeMenu()
+            void useLibrary.getState().rescan(comic.id)
+          }}
+        >
+          <Icon name="refresh" size={14} />
+          重新扫描（刷新页数和封面）
+        </button>
+        <button
+          onClick={() => {
+            closeMenu()
+            void window.api.revealComic(comic.id)
+          }}
+        >
+          <Icon name="folder-open" size={14} />
+          打开所在位置
+        </button>
+        <button
+          className="danger"
+          onClick={() => {
+            closeMenu()
+            onDelete(comic)
+          }}
+        >
+          <Icon name="trash" size={14} />
+          从书架移除…
+        </button>
+      </DropdownMenu>
 
       <div className="card-info">
         <div className="card-title" title={comic.title}>
