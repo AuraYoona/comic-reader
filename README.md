@@ -68,7 +68,6 @@
 | `ComicReader-Setup-x.y.z.exe` | 安装版，可选安装目录，含卸载器 |
 | `ComicReader-x.y.z.exe` | 便携版，免安装单文件，随处运行 |
 
-> 安装包未做代码签名，首次运行如遇 SmartScreen 提示，点「更多信息 → 仍要运行」。
 
 用户数据保存在 `%APPDATA%/comic-reader/`，卸载重装不丢失：
 
@@ -79,88 +78,6 @@ window-state.json   窗口大小与位置
 logs/main.log       主进程日志（>2MB 自动轮转）
 ```
 
-## 🛠️ 开发
-
-```bash
-git clone https://github.com/AuraYoona/comic-reader.git
-cd comic-reader
-npm install          # 国内网络建议先设置 Electron 镜像，见下
-npm run dev          # 开发环境（热更新，F12 开调试器）
-npm run typecheck    # TypeScript 类型检查（主进程 + 渲染层双配置）
-npm test             # vitest 单元测试
-```
-
-国内网络加速 Electron 下载：
-
-```powershell
-$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-npm install
-```
-
-### 打包 Windows 应用
-
-```bash
-npm run build:win     # NSIS 安装包 + 便携版 → release/<版本号>/
-npm run build:unpack  # 仅输出未压缩目录（调试用）
-```
-
-- 打包配置在 `package.json` 的 `build` 字段；`electronDist` 指向本地
-  `node_modules/electron/dist`，**不再从 GitHub 下载**，且保证与开发版本一致
-- NSIS 工具下载慢时设置：
-  `ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/`
-- 首次打包若报 `Cannot create symbolic link`：开启 Windows「开发者模式」后重试
-  （出错的只是工具包内 macOS 符号链接，Windows 打包并不使用）
-- 应用图标由 `node scripts/gen-icon.js` 生成到 `build/icon.png`，替换该文件即可换图标
-
-### 发布新版本
-
-仓库配置了 GitHub Actions：**CI**（推送 / PR 自动跑类型检查、测试、构建）与
-**Release**（推 `v*` 标签自动在 Windows 环境打包并上传 Release 草稿）。
-
-```bash
-# 1. 更新 package.json 的 version，提交
-git commit -am "release: v0.3.0"
-
-# 2. 打标签推送，触发云端自动打包
-git tag v0.3.0
-git push origin main v0.3.0
-
-# 3. Actions 完成后检查 Release 草稿并发布
-gh release edit v0.3.0 --draft=false
-```
-
-## 🏗️ 架构
-
-```
-src/
-├── shared/                  # 主/渲染进程共享契约（改这里，两端类型同步）
-│   ├── types.ts             #   Comic、AppSettings、枚举等数据结构
-│   ├── ipc.ts               #   IPC 通道名常量
-│   └── api.ts               #   window.api 接口定义
-├── main/                    # Electron 主进程
-│   ├── index.ts             #   生命周期、窗口、安全策略
-│   ├── protocol.ts          #   comic:// 自定义协议（图片按需流式返回）
-│   ├── archive.ts           #   文件夹/ZIP 统一抽象：扫描、按页读取、句柄缓存
-│   ├── importer.ts          #   导入流程：去重、计页、封面、批量展开
-│   ├── thumbnail.ts         #   nativeImage 封面缩略图（无原生依赖）
-│   ├── ipc.ts               #   全部 IPC handler（入参校验）
-│   ├── store/
-│   │   ├── db.ts            #   library.json：防抖 + 原子写 + 损坏自愈
-│   │   ├── migrations.ts    #   schema 迁移管线（纯函数，可单测）
-│   │   └── windowState.ts   #   窗口位置记忆（多显示器越界校验）
-│   ├── lib/logger.ts        #   文件日志（2MB 自动轮转）
-│   └── utils/               #   自然排序、图片类型/MIME
-├── preload/index.ts         # contextBridge 暴露类型安全的 window.api
-└── renderer/src/            # React 界面
-    ├── pages/               #   Bookshelf 书架 / Reader 阅读器
-    ├── components/          #   bookshelf / reader / common 组件
-    ├── store/               #   zustand：settings / library / reader / ui
-    ├── hooks/               #   useVirtualGrid / useAutoHide / useClickOutside
-    ├── lib/pageCache.ts     #   相邻页预解码 LRU
-    └── styles/global.css    #   明暗主题 CSS 变量
-tests/unit/                  # vitest：排序 / 迁移 / 格式化 / 文件识别
-.github/workflows/           # CI + tag 自动发布
-```
 
 ### 关键设计
 
