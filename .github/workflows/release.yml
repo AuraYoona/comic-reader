@@ -1,0 +1,42 @@
+name: Release
+
+# 推送 v* 标签时自动：构建 → 打包 Windows 安装包/便携版 → 创建 GitHub Release 并上传产物
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # 创建 Release 需要写权限
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build bundles
+        run: npx electron-vite build
+
+      # electron-builder 会从 git 远程推断仓库，自动创建 Release（草稿）并上传：
+      # 安装包、便携版、blockmap、latest.yml（未来接入自动更新可直接用）
+      - name: Package & publish
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

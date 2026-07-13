@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      本地桌面应用，从不加载远程内容。
+      script-src 里的 'unsafe-inline' 仅为开发期 vite/react-refresh 注入的内联脚本放行。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' comic: data: blob:; connect-src 'self' ws://localhost:* http://localhost:*; font-src 'self' data:"
+    />
+    <title>漫画阅读器</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
