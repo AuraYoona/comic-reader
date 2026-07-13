@@ -11,7 +11,7 @@
 ![Tests](https://img.shields.io/badge/tests-vitest%20%C3%97%2023-6e9f18)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**[下载最新版本 →](https://github.com/DaFuuu-22/comic-reader/releases)**
+**[下载最新版本 →](https://github.com/AuraYoona/comic-reader/releases)**
 
 </div>
 
@@ -61,7 +61,7 @@
 
 ## 📦 安装
 
-到 [Releases](https://github.com/DaFuuu-22/comic-reader/releases) 页面下载：
+到 [Releases](https://github.com/AuraYoona/comic-reader/releases) 页面下载：
 
 | 文件 | 说明 |
 | --- | --- |
@@ -82,7 +82,7 @@ logs/main.log       主进程日志（>2MB 自动轮转）
 ## 🛠️ 开发
 
 ```bash
-git clone https://github.com/DaFuuu-22/comic-reader.git
+git clone https://github.com/AuraYoona/comic-reader.git
 cd comic-reader
 npm install          # 国内网络建议先设置 Electron 镜像，见下
 npm run dev          # 开发环境（热更新，F12 开调试器）

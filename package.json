@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "description": "A local comic reader for Windows built with Electron + React + TypeScript.",
   "author": "ComicReader",
-  "repository": "github:DaFuuu-22/comic-reader",
+  "repository": "github:AuraYoona/comic-reader",
   "license": "MIT",
   "main": "./out/main/index.js",
   "scripts": {
