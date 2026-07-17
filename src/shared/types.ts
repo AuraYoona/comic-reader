@@ -16,6 +16,12 @@ export type SortKey = 'title' | 'lastReadAt' | 'addedAt'
 /** 书架卡片大小 */
 export type CardSize = 'small' | 'medium' | 'large'
 
+/** 扩展功能 ID（v3 新增） */
+export type ExtensionId = 'categories'
+
+/** 全部扩展功能 ID，供主进程做白名单校验 */
+export const EXTENSION_IDS: readonly ExtensionId[] = ['categories']
+
 /** 漫画来源类型：本地文件夹 / ZIP、CBZ 压缩包 */
 export type SourceType = 'folder' | 'archive'
 
@@ -43,6 +49,45 @@ export interface Comic {
   /** 0 起始的页码 */
   lastReadPage: number
   reader: ComicReaderPrefs
+  /** 所属分类 id 列表（v3 新增，一本漫画可属于多个分类） */
+  categoryIds: string[]
+}
+
+/** 自定义分类（v3 新增，属于「自定义分类」扩展功能） */
+export interface Category {
+  id: string
+  name: string
+  /** 预设调色板中的颜色，形如 #rrggbb */
+  color: string
+  createdAt: number
+}
+
+/** 分类可选颜色，新建时按已有数量循环取默认值 */
+export const CATEGORY_COLORS: readonly string[] = [
+  '#ef4444',
+  '#f97316',
+  '#eab308',
+  '#22c55e',
+  '#14b8a6',
+  '#3b82f6',
+  '#8b5cf6',
+  '#ec4899'
+]
+
+/** 分类名称最大长度 */
+export const CATEGORY_NAME_MAX = 20
+
+/** 新建/修改分类的结果 */
+export interface CategoryMutationResult {
+  ok: boolean
+  category?: Category
+  error?: string
+}
+
+/** 修改分类的补丁 */
+export interface CategoryPatch {
+  name?: string
+  color?: string
 }
 
 /** 全局设置 */
@@ -56,6 +101,8 @@ export interface AppSettings {
   lastOpenedComicId: string | null
   /** 书架卡片大小（v2 新增） */
   cardSize: CardSize
+  /** 扩展功能开关（v3 新增），关闭只隐藏入口，不删除任何数据 */
+  extensions: Record<ExtensionId, boolean>
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -65,7 +112,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultZoom: 'fitWidth',
   openLastOnStartup: false,
   lastOpenedComicId: null,
-  cardSize: 'medium'
+  cardSize: 'medium',
+  extensions: { categories: false }
 }
 
 /** 单个导入项的结果 */

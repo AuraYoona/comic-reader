@@ -28,8 +28,29 @@ export function EmptyShelf(): ReactNode {
   )
 }
 
-/** 搜索无结果 */
-export function NoResults({ query }: { query: string }): ReactNode {
+/** 搜索 / 分类筛选无结果 */
+export function NoResults({
+  query,
+  categoryLabel,
+  uncategorized = false
+}: {
+  query: string
+  categoryLabel?: string | null
+  /** 当前筛选是否为「未分类」哨兵（用户可以创建同名真实分类，不能靠名称区分） */
+  uncategorized?: boolean
+}): ReactNode {
+  // 没有搜索词时说明是分类筛选出的空结果，换成分类文案
+  if (query === '' && (uncategorized || categoryLabel)) {
+    return (
+      <div className="state-pane">
+        <div className="state-icon">
+          <Icon name="tag" size={40} />
+        </div>
+        <h2>{uncategorized ? '没有未分类的漫画' : `「${categoryLabel}」分类下还没有漫画`}</h2>
+        <p>{uncategorized ? '每本漫画都已加入分类。' : '在卡片菜单中选择「设置分类…」即可加入。'}</p>
+      </div>
+    )
+  }
   return (
     <div className="state-pane">
       <div className="state-icon">

@@ -1,8 +1,24 @@
 import type { ReactNode } from 'react'
-import type { CardSize, ReadingDirection, ReadingMode, ThemeMode, ZoomMode } from '@shared/types'
+import type {
+  CardSize,
+  ExtensionId,
+  ReadingDirection,
+  ReadingMode,
+  ThemeMode,
+  ZoomMode
+} from '@shared/types'
 import Modal from '@/components/common/Modal'
 import Segmented from '@/components/common/Segmented'
 import { useSettings } from '@/store/settings'
+
+/** 扩展功能注册表：新增扩展时在这里补一条开关文案即可 */
+const EXTENSIONS: { id: ExtensionId; name: string; hint: string }[] = [
+  {
+    id: 'categories',
+    name: '自定义分类',
+    hint: '创建分类整理书架，入口在顶栏与卡片菜单；关闭不会删除数据'
+  }
+]
 
 /** 全局设置弹窗，改动即时保存 */
 export default function SettingsModal({ onClose }: { onClose: () => void }): ReactNode {
@@ -101,6 +117,28 @@ export default function SettingsModal({ onClose }: { onClose: () => void }): Rea
           <span className="switch-knob" />
         </button>
       </div>
+
+      <div className="settings-section">扩展功能</div>
+      {EXTENSIONS.map((ext) => (
+        <div key={ext.id} className="settings-row">
+          <div className="settings-label">
+            <span>{ext.name}</span>
+            <small>{ext.hint}</small>
+          </div>
+          <button
+            className={settings.extensions[ext.id] ? 'switch on' : 'switch'}
+            role="switch"
+            aria-checked={settings.extensions[ext.id]}
+            onClick={() =>
+              void update({
+                extensions: { ...settings.extensions, [ext.id]: !settings.extensions[ext.id] }
+              })
+            }
+          >
+            <span className="switch-knob" />
+          </button>
+        </div>
+      ))}
     </Modal>
   )
 }

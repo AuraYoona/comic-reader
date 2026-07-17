@@ -8,9 +8,10 @@
  * 版本历史：
  *   v1  MVP：{ version, settings, comics }
  *   v2  settings 增加 cardSize（书架卡片大小）
+ *   v3  settings 增加 extensions（扩展开关）、顶层增加 categories（分类集合）、comic 增加 categoryIds
  */
 
-export const CURRENT_SCHEMA_VERSION = 2
+export const CURRENT_SCHEMA_VERSION = 3
 
 type AnyRecord = Record<string, unknown>
 
@@ -29,6 +30,18 @@ const MIGRATIONS: Record<number, (data: AnyRecord) => AnyRecord> = {
       version: 2,
       // 默认值放前面：老数据里已有同名字段时以老数据为准
       settings: { cardSize: 'medium', ...settings }
+    }
+  },
+  2: (data) => {
+    const settings = (data.settings ?? {}) as AnyRecord
+    const comics = Array.isArray(data.comics) ? data.comics : []
+    return {
+      ...data,
+      version: 3,
+      // 默认值放前面：老数据里已有同名字段时以老数据为准
+      settings: { extensions: { categories: false }, ...settings },
+      categories: Array.isArray(data.categories) ? data.categories : [],
+      comics: comics.map((c) => (c && typeof c === 'object' ? { categoryIds: [], ...c } : c))
     }
   }
 }

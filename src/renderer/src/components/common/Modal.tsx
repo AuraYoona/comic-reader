@@ -7,11 +7,11 @@ interface ModalProps {
   width?: number
 }
 
-/** 通用弹窗：遮罩点击关闭、Esc 关闭 */
+/** 通用弹窗：遮罩点击关闭、Esc 关闭（取消输入法组合的 Esc 不算） */
 export default function Modal({ title, onClose, children, width = 520 }: ModalProps): ReactNode {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.isComposing) {
         e.stopPropagation()
         onClose()
       }

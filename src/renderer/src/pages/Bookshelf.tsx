@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { CardSize, Comic } from '@shared/types'
+import CategoryAssignModal from '@/components/bookshelf/CategoryAssignModal'
+import CategoryManagerModal from '@/components/bookshelf/CategoryManagerModal'
 import ComicCard from '@/components/bookshelf/ComicCard'
 import SettingsModal from '@/components/bookshelf/SettingsModal'
 import TopBar from '@/components/bookshelf/TopBar'
@@ -12,7 +14,7 @@ import {
 } from '@/components/bookshelf/ShelfStates'
 import Modal from '@/components/common/Modal'
 import { useVirtualGrid } from '@/hooks/useVirtualGrid'
-import { useLibrary } from '@/store/library'
+import { UNCATEGORIZED_ID, useLibrary } from '@/store/library'
 import { useReader } from '@/store/reader'
 import { useSettings } from '@/store/settings'
 
@@ -30,19 +32,33 @@ export default function Bookshelf(): ReactNode {
   const query = useLibrary((s) => s.query)
   const sortKey = useLibrary((s) => s.sortKey)
   const missingIds = useLibrary((s) => s.missingIds)
+  const categories = useLibrary((s) => s.categories)
+  const activeCategoryId = useLibrary((s) => s.activeCategoryId)
   const remove = useLibrary((s) => s.remove)
   const importDropped = useLibrary((s) => s.importDropped)
   const cardSize = useSettings((s) => s.settings.cardSize)
+  const categoriesEnabled = useSettings((s) => s.settings.extensions.categories)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Comic | null>(null)
+  const [categoryTarget, setCategoryTarget] = useState<Comic | null>(null)
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const dragDepth = useRef(0)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const filtered = q ? comics.filter((c) => c.title.toLowerCase().includes(q)) : [...comics]
+    // 扩展关闭时忽略残留的分类筛选；filter 总是产出新数组，原地 sort 不会动到 store
+    const cat = categoriesEnabled ? activeCategoryId : null
+    const filtered = comics.filter((c) => {
+      if (cat === UNCATEGORIZED_ID) {
+        if (c.categoryIds.length > 0) return false
+      } else if (cat !== null && !c.categoryIds.includes(cat)) {
+        return false
+      }
+      return q === '' || c.title.toLowerCase().includes(q)
+    })
     switch (sortKey) {
       case 'title':
         return filtered.sort((a, b) => titleCollator.compare(a.title, b.title))
@@ -55,7 +71,7 @@ export default function Bookshelf(): ReactNode {
           (a, b) => (b.lastReadAt ?? 0) - (a.lastReadAt ?? 0) || b.addedAt - a.addedAt
         )
     }
-  }, [comics, query, sortKey])
+  }, [comics, query, sortKey, categoriesEnabled, activeCategoryId])
 
   const { containerRef, onScroll, totalHeight, items } = useVirtualGrid({
     count: visible.length,
@@ -63,6 +79,23 @@ export default function Bookshelf(): ReactNode {
     gap: GRID_GAP,
     extraHeight: CARD_INFO_HEIGHT
   })
+
+  // 分类弹窗跟随 store 里的最新记录：勾选后立即刷新，漫画被移除时自动关闭
+  const liveCategoryTarget = categoryTarget
+    ? (comics.find((c) => c.id === categoryTarget.id) ?? null)
+    : null
+
+  // 空结果文案用：当前分类筛选的名称（未分类 / 分类名）
+  const activeCategoryLabel = useMemo(() => {
+    if (!categoriesEnabled || activeCategoryId === null) return null
+    if (activeCategoryId === UNCATEGORIZED_ID) return '未分类'
+    return categories.find((c) => c.id === activeCategoryId)?.name ?? null
+  }, [categoriesEnabled, activeCategoryId, categories])
+
+  // 切换分类筛选后回到顶部
+  useEffect(() => {
+    if (containerRef.current) containerRef.current.scrollTop = 0
+  }, [activeCategoryId, categoriesEnabled, containerRef])
 
   // 来源存在性校验：加载后 + 窗口重新聚焦时（节流）
   useEffect(() => {
@@ -132,7 +165,11 @@ export default function Bookshelf(): ReactNode {
 
   return (
     <div className="shelf">
-      <TopBar onOpenSettings={() => setSettingsOpen(true)} searchInputRef={searchInputRef} />
+      <TopBar
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenCategoryManager={() => setCategoryManagerOpen(true)}
+        searchInputRef={searchInputRef}
+      />
 
       <main className="shelf-body" ref={containerRef} onScroll={onScroll}>
         {loading ? (
@@ -140,7 +177,11 @@ export default function Bookshelf(): ReactNode {
         ) : comics.length === 0 ? (
           <EmptyShelf />
         ) : visible.length === 0 ? (
-          <NoResults query={query.trim()} />
+          <NoResults
+            query={query.trim()}
+            categoryLabel={activeCategoryLabel}
+            uncategorized={categoriesEnabled && activeCategoryId === UNCATEGORIZED_ID}
+          />
         ) : (
           <div className="vgrid" style={{ height: totalHeight }}>
             {items.map(({ index, style }) => {
@@ -152,6 +193,7 @@ export default function Bookshelf(): ReactNode {
                     comic={comic}
                     missing={missingIds.has(comic.id)}
                     onDelete={setDeleteTarget}
+                    onSetCategories={setCategoryTarget}
                   />
                 </div>
               )
@@ -163,6 +205,21 @@ export default function Bookshelf(): ReactNode {
       <ImportingToast />
       {dragOver && <DropOverlay />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+
+      {liveCategoryTarget && (
+        <CategoryAssignModal
+          comic={liveCategoryTarget}
+          onClose={() => setCategoryTarget(null)}
+          onOpenManager={() => {
+            // 先关掉本弹窗再开管理弹窗：叠放的弹窗会被一次 Esc 全部关闭
+            setCategoryTarget(null)
+            setCategoryManagerOpen(true)
+          }}
+        />
+      )}
+      {categoryManagerOpen && (
+        <CategoryManagerModal onClose={() => setCategoryManagerOpen(false)} />
+      )}
 
       {deleteTarget && (
         <Modal title="从书架移除" onClose={() => setDeleteTarget(null)} width={440}>

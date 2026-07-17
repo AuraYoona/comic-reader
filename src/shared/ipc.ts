@@ -16,11 +16,20 @@ export const IPC = {
   SettingsGet: 'settings:get',
   SettingsSave: 'settings:save',
 
+  /** invoke: 分类列表（「自定义分类」扩展功能） */
+  CategoryList: 'category:list',
+  CategoryCreate: 'category:create',
+  CategoryUpdate: 'category:update',
+  /** invoke: 删除分类，仅解除漫画与它的关联，不影响漫画本身 */
+  CategoryDelete: 'category:delete',
+
   /** invoke: 打开漫画，重新扫描来源并返回最新页数 */
   ComicOpen: 'comic:open',
   ComicReveal: 'comic:reveal',
   /** invoke: 重新扫描单本（刷新页数、重新生成封面） */
   ComicRescan: 'comic:rescan',
+  /** invoke: 把漫画加入/移出一个分类（主进程按当前归属决定方向） */
+  ComicToggleCategory: 'comic:toggle-category',
 
   WindowSetFullscreen: 'window:set-fullscreen',
   WindowIsFullscreen: 'window:is-fullscreen',

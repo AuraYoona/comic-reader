@@ -8,7 +8,7 @@
 ![Electron](https://img.shields.io/badge/Electron-31-47848f)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
-![Tests](https://img.shields.io/badge/tests-vitest%20%C3%97%2023-6e9f18)
+![Tests](https://img.shields.io/badge/tests-vitest%20%C3%97%2026-6e9f18)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **[下载最新版本 →](https://github.com/AuraYoona/comic-reader/releases)**
@@ -45,6 +45,11 @@
 - 全局设置：浅色 / 深色 / 跟随系统主题、默认阅读模式与缩放、启动时打开上次阅读
 - 数据结构**版本化 + 自动迁移**，升级应用不丢数据（迁移前自动备份）
 
+### 🧩 扩展功能
+- 设置中可按需**开启 / 关闭**的可选功能，关闭只隐藏入口，**数据不会删除**
+- **自定义分类**：创建 / 重命名 / 换色 / 删除分类，一本漫画可同时属于多个分类
+- 顶栏按分类筛选（含「未分类」视图），卡片菜单「设置分类…」即点即存
+
 ## ⌨️ 快捷键
 
 | 按键 | 功能 |
@@ -72,7 +77,7 @@
 用户数据保存在 `%APPDATA%/comic-reader/`，卸载重装不丢失：
 
 ```
-library.json        漫画列表、阅读进度、全局设置（原子写入，损坏自动备份重建）
+library.json        漫画列表、分类、阅读进度、全局设置（原子写入，损坏自动备份重建）
 covers/             封面缩略图
 window-state.json   窗口大小与位置
 logs/main.log       主进程日志（>2MB 自动轮转）
@@ -95,7 +100,8 @@ logs/main.log       主进程日志（>2MB 自动轮转）
 
 - [ ] RAR / CBR、PDF 支持
 - [ ] 双页模式封面单独显示（首页对齐）
-- [ ] 标签 / 分组、批量管理
+- [x] 分组整理（「自定义分类」扩展功能）
+- [ ] 标签、批量管理
 - [ ] 书签与阅读历史
 - [ ] 缩略图快速跳页条
 - [ ] 自动更新（electron-updater，Release 已附带 latest.yml）
