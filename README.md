@@ -106,6 +106,3 @@ logs/main.log       主进程日志（>2MB 自动轮转）
 - [ ] 缩略图快速跳页条
 - [ ] 自动更新（electron-updater，Release 已附带 latest.yml）
 
-## 📄 License
-
-[MIT](LICENSE)
