@@ -1,6 +1,6 @@
 {
   "name": "comic-reader",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "A local comic reader for Windows built with Electron + React + TypeScript.",
   "author": "ComicReader",
   "repository": "github:AuraYoona/comic-reader",
@@ -66,7 +66,11 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "perMachine": false
+      "perMachine": false,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}.${ext}"
     }
   },
   "allowScripts": {
