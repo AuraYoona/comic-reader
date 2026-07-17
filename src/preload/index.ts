@@ -27,6 +27,13 @@ const api: RendererApi = {
   getSettings: () => ipcRenderer.invoke(IPC.SettingsGet),
   saveSettings: (patch) => ipcRenderer.invoke(IPC.SettingsSave, patch),
 
+  listCategories: () => ipcRenderer.invoke(IPC.CategoryList),
+  createCategory: (name, color) => ipcRenderer.invoke(IPC.CategoryCreate, name, color),
+  updateCategory: (id, patch) => ipcRenderer.invoke(IPC.CategoryUpdate, id, patch),
+  deleteCategory: (id) => ipcRenderer.invoke(IPC.CategoryDelete, id),
+  toggleComicCategory: (id, categoryId) =>
+    ipcRenderer.invoke(IPC.ComicToggleCategory, id, categoryId),
+
   setFullscreen: (flag) => ipcRenderer.invoke(IPC.WindowSetFullscreen, flag),
   isFullscreen: () => ipcRenderer.invoke(IPC.WindowIsFullscreen),
   onFullscreenChange: (cb) => subscribe<boolean>(IPC.WindowFullscreenChanged, cb),

@@ -23,6 +23,9 @@ export type IconName =
   | 'play'
   | 'folder-open'
   | 'refresh'
+  | 'tag'
+  | 'check'
+  | 'edit'
 
 const PATHS: Record<IconName, ReactElement> = {
   search: (
@@ -151,7 +154,15 @@ const PATHS: Record<IconName, ReactElement> = {
       <polyline points="23 4 23 10 17 10" />
       <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
     </>
-  )
+  ),
+  tag: (
+    <>
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83z" />
+      <path d="M7 7h.01" />
+    </>
+  ),
+  check: <path d="M20 6L9 17l-5-5" />,
+  edit: <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
 }
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }): ReactElement {

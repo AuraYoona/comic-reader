@@ -4,6 +4,7 @@ import DropdownMenu from '@/components/common/DropdownMenu'
 import { Icon } from '@/components/common/Icon'
 import { useLibrary } from '@/store/library'
 import { useReader } from '@/store/reader'
+import { useSettings } from '@/store/settings'
 import { coverUrl } from '@/utils/comicUrl'
 import { readPercent, relativeTime } from '@/utils/format'
 
@@ -11,11 +12,13 @@ interface ComicCardProps {
   comic: Comic
   missing: boolean
   onDelete: (comic: Comic) => void
+  onSetCategories: (comic: Comic) => void
 }
 
 /** 书架卡片。memo 化：虚拟滚动时只有进出视口和数据变化的卡片会重渲染。 */
-function ComicCard({ comic, missing, onDelete }: ComicCardProps): ReactNode {
+function ComicCard({ comic, missing, onDelete, onSetCategories }: ComicCardProps): ReactNode {
   const open = useReader((s) => s.open)
+  const categoriesEnabled = useSettings((s) => s.settings.extensions.categories)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState<{ x: number; y: number } | null>(null)
   const [coverFailed, setCoverFailed] = useState(false)
@@ -121,6 +124,17 @@ function ComicCard({ comic, missing, onDelete }: ComicCardProps): ReactNode {
           <Icon name="folder-open" size={14} />
           打开所在位置
         </button>
+        {categoriesEnabled && (
+          <button
+            onClick={() => {
+              closeMenu()
+              onSetCategories(comic)
+            }}
+          >
+            <Icon name="tag" size={14} />
+            设置分类…
+          </button>
+        )}
         <button
           className="danger"
           onClick={() => {

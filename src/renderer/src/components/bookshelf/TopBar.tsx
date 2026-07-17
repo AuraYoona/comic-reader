@@ -10,7 +10,7 @@ import type { SortKey } from '@shared/types'
 import DropdownMenu from '@/components/common/DropdownMenu'
 import { Icon } from '@/components/common/Icon'
 import { resolvedThemeIsDark, useSettings } from '@/store/settings'
-import { useLibrary } from '@/store/library'
+import { UNCATEGORIZED_ID, useLibrary } from '@/store/library'
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'lastReadAt', label: '最近阅读' },
@@ -22,17 +22,26 @@ const SEARCH_DEBOUNCE_MS = 150
 
 interface TopBarProps {
   onOpenSettings: () => void
+  onOpenCategoryManager: () => void
   searchInputRef: RefObject<HTMLInputElement>
 }
 
-export default function TopBar({ onOpenSettings, searchInputRef }: TopBarProps): ReactNode {
+export default function TopBar({
+  onOpenSettings,
+  onOpenCategoryManager,
+  searchInputRef
+}: TopBarProps): ReactNode {
   const query = useLibrary((s) => s.query)
   const setQuery = useLibrary((s) => s.setQuery)
   const sortKey = useLibrary((s) => s.sortKey)
   const setSortKey = useLibrary((s) => s.setSortKey)
+  const categories = useLibrary((s) => s.categories)
+  const activeCategoryId = useLibrary((s) => s.activeCategoryId)
+  const setActiveCategory = useLibrary((s) => s.setActiveCategory)
   const importFrom = useLibrary((s) => s.importFrom)
   const importing = useLibrary((s) => s.importing.active)
   const theme = useSettings((s) => s.settings.theme)
+  const categoriesEnabled = useSettings((s) => s.settings.extensions.categories)
   const updateSettings = useSettings((s) => s.update)
 
   // 输入即时显示、过滤防抖：几千本时打字不卡
@@ -97,6 +106,29 @@ export default function TopBar({ onOpenSettings, searchInputRef }: TopBarProps):
       </div>
 
       <div className="topbar-actions">
+        {categoriesEnabled && (
+          <>
+            <label className="sort-box" title="按分类筛选">
+              <span className="sort-label">分类</span>
+              <select
+                value={activeCategoryId ?? ''}
+                onChange={(e) => setActiveCategory(e.target.value === '' ? null : e.target.value)}
+              >
+                <option value="">全部</option>
+                <option value={UNCATEGORIZED_ID}>未分类</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="icon-btn" title="管理分类" onClick={onOpenCategoryManager}>
+              <Icon name="tag" size={17} />
+            </button>
+          </>
+        )}
+
         <label className="sort-box" title="排序方式">
           <span className="sort-label">排序</span>
           <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>

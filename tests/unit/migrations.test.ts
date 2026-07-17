@@ -19,7 +19,8 @@ describe('migrateLibraryData', () => {
     expect(settings.cardSize).toBe('medium')
     expect(settings.theme).toBe('dark')
     expect(settings.readingDirection).toBe('rtl')
-    expect(data.comics).toEqual(v1.comics)
+    // v2 之后的迁移步骤会补充新字段（如 categoryIds），原有字段仍须原样保留
+    expect(data.comics).toMatchObject(v1.comics)
   })
 
   it('已是当前版本：不迁移不改动', () => {
@@ -37,6 +38,61 @@ describe('migrateLibraryData', () => {
     const v1 = { version: 1, settings: { cardSize: 'small' }, comics: [] }
     const { data } = migrateLibraryData(v1)
     expect((data.settings as Record<string, unknown>).cardSize).toBe('small')
+  })
+
+  it('v2 → v3：settings 补上 extensions，顶层补上 categories，每本漫画补上 categoryIds', () => {
+    const v2 = {
+      version: 2,
+      settings: { theme: 'dark', cardSize: 'large' },
+      comics: [
+        { id: 'a', title: 'A', sourcePath: 'C:/a' },
+        { id: 'b', title: 'B', sourcePath: 'C:/b' }
+      ]
+    }
+    const { data, fromVersion, migrated } = migrateLibraryData(v2)
+    expect(migrated).toBe(true)
+    expect(fromVersion).toBe(2)
+    expect(data.version).toBe(CURRENT_SCHEMA_VERSION)
+    const settings = data.settings as Record<string, unknown>
+    expect(settings.extensions).toEqual({ categories: false })
+    expect(settings.theme).toBe('dark')
+    expect(settings.cardSize).toBe('large')
+    expect(data.categories).toEqual([])
+    for (const c of data.comics as Record<string, unknown>[]) {
+      expect(c.categoryIds).toEqual([])
+    }
+  })
+
+  it('v2 数据里已有 extensions / categories / categoryIds 时原样保留', () => {
+    const v2 = {
+      version: 2,
+      settings: { cardSize: 'medium', extensions: { categories: true } },
+      categories: [{ id: 'c1', name: '连载中', color: '#ef4444', createdAt: 1 }],
+      comics: [{ id: 'a', title: 'A', sourcePath: 'C:/a', categoryIds: ['x'] }]
+    }
+    const { data, migrated } = migrateLibraryData(v2)
+    expect(migrated).toBe(true)
+    expect((data.settings as Record<string, unknown>).extensions).toEqual({ categories: true })
+    expect(data.categories).toEqual(v2.categories)
+    expect((data.comics as Record<string, unknown>[])[0].categoryIds).toEqual(['x'])
+  })
+
+  it('v1 → v3 链式迁移：一次补齐 cardSize、extensions、categories 与 categoryIds', () => {
+    const v1 = {
+      version: 1,
+      settings: { theme: 'dark' },
+      comics: [{ id: 'a', title: 'A', sourcePath: 'C:/a' }]
+    }
+    const { data, fromVersion, migrated } = migrateLibraryData(v1)
+    expect(migrated).toBe(true)
+    expect(fromVersion).toBe(1)
+    expect(data.version).toBe(CURRENT_SCHEMA_VERSION)
+    const settings = data.settings as Record<string, unknown>
+    expect(settings.theme).toBe('dark')
+    expect(settings.cardSize).toBe('medium')
+    expect(settings.extensions).toEqual({ categories: false })
+    expect(data.categories).toEqual([])
+    expect((data.comics as Record<string, unknown>[])[0].categoryIds).toEqual([])
   })
 
   it('缺失 version 字段按 v1 处理', () => {

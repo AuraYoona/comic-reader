@@ -1,5 +1,8 @@
 import type {
   AppSettings,
+  Category,
+  CategoryMutationResult,
+  CategoryPatch,
   Comic,
   ImportResult,
   OpenComicResult,
@@ -39,6 +42,15 @@ export interface RendererApi {
 
   getSettings(): Promise<AppSettings>
   saveSettings(patch: Partial<AppSettings>): Promise<AppSettings>
+
+  /** 「自定义分类」扩展功能：列出全部分类（按创建时间升序） */
+  listCategories(): Promise<Category[]>
+  createCategory(name: string, color?: string): Promise<CategoryMutationResult>
+  updateCategory(id: string, patch: CategoryPatch): Promise<CategoryMutationResult>
+  /** 删除分类并解除所有漫画与它的关联，返回是否删除成功 */
+  deleteCategory(id: string): Promise<boolean>
+  /** 把漫画加入/移出一个分类，方向由主进程按当前归属判定（并发切换不会互相覆盖），返回更新后的记录 */
+  toggleComicCategory(id: string, categoryId: string): Promise<Comic | null>
 
   setFullscreen(flag: boolean): Promise<void>
   isFullscreen(): Promise<boolean>

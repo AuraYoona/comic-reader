@@ -3,7 +3,15 @@ import path from 'node:path'
 import { BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { IPC } from '@shared/ipc'
 import type { ImportKind } from '@shared/api'
-import type { Comic, OpenComicResult, ProgressPatch, SourceCheck } from '@shared/types'
+import {
+  CATEGORY_NAME_MAX,
+  type CategoryMutationResult,
+  type CategoryPatch,
+  type Comic,
+  type OpenComicResult,
+  type ProgressPatch,
+  type SourceCheck
+} from '@shared/types'
 import { SourceError, getPageList, invalidateComic, sourceExists } from './archive'
 import { expandBatchRoot, importPaths, regenerateCover } from './importer'
 import { logger } from './lib/logger'
@@ -174,6 +182,63 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
 
   ipcMain.handle(IPC.SettingsSave, (_e, patch: unknown) =>
     db.saveSettings(patch && typeof patch === 'object' ? (patch as never) : {})
+  )
+
+  // ---------- 分类 ----------
+
+  ipcMain.handle(IPC.CategoryList, () => db.listCategories())
+
+  ipcMain.handle(
+    IPC.CategoryCreate,
+    (_e, name: unknown, color: unknown): CategoryMutationResult => {
+      if (typeof name !== 'string') return { ok: false, error: '参数错误' }
+      const trimmed = name.trim()
+      if (!trimmed) return { ok: false, error: '名称不能为空' }
+      if (trimmed.length > CATEGORY_NAME_MAX) return { ok: false, error: '名称过长' }
+      if (db.listCategories().some((c) => c.name === trimmed)) {
+        return { ok: false, error: '同名分类已存在' }
+      }
+      const category = db.createCategory(trimmed, typeof color === 'string' ? color : undefined)
+      logger.info('library', `新建分类「${category.name}」`)
+      return { ok: true, category }
+    }
+  )
+
+  ipcMain.handle(IPC.CategoryUpdate, (_e, id: unknown, patch: unknown): CategoryMutationResult => {
+    if (typeof id !== 'string' || !patch || typeof patch !== 'object') {
+      return { ok: false, error: '参数错误' }
+    }
+    const raw = patch as Record<string, unknown>
+    // 只把校验过的字段写库，不透传渲染进程传来的原始对象
+    const vetted: CategoryPatch = {}
+    if (typeof raw.name === 'string') {
+      const trimmed = raw.name.trim()
+      if (!trimmed) return { ok: false, error: '名称不能为空' }
+      if (trimmed.length > CATEGORY_NAME_MAX) return { ok: false, error: '名称过长' }
+      if (db.listCategories().some((c) => c.id !== id && c.name === trimmed)) {
+        return { ok: false, error: '同名分类已存在' }
+      }
+      vetted.name = trimmed
+    }
+    if (typeof raw.color === 'string') vetted.color = raw.color
+    const category = db.updateCategory(id, vetted)
+    if (!category) return { ok: false, error: '分类不存在' }
+    return { ok: true, category }
+  })
+
+  ipcMain.handle(IPC.CategoryDelete, (_e, id: unknown): boolean => {
+    if (typeof id !== 'string') return false
+    const removed = db.deleteCategory(id)
+    if (removed) logger.info('library', `删除分类 ${id}（仅解除漫画关联）`)
+    return removed
+  })
+
+  ipcMain.handle(
+    IPC.ComicToggleCategory,
+    (_e, id: unknown, categoryId: unknown): Comic | null => {
+      if (typeof id !== 'string' || typeof categoryId !== 'string') return null
+      return db.toggleComicCategory(id, categoryId)
+    }
   )
 
   // ---------- 窗口 ----------

@@ -402,6 +402,9 @@ button {
   font-size: 13px;
   outline: none;
   cursor: pointer;
+  /* 分类筛选的选项是用户输入的名称，钳制宽度避免撑开顶栏挤压搜索框 */
+  max-width: 168px;
+  text-overflow: ellipsis;
 }
 
 /* ============================================================
@@ -1036,4 +1039,159 @@ button {
   font-size: 20px;
   font-variant-numeric: tabular-nums;
   border-radius: 2px;
+}
+
+/* ============================================================
+   分类（自定义分类扩展）
+   ============================================================ */
+/* 设置弹窗里的小节标题：上方分隔线由前一行 .settings-row 的下边框提供 */
+.settings-section {
+  margin-top: 8px;
+  padding-top: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+/* 弹窗顶部的漫画标题（设置分类弹窗） */
+.cat-comic-title {
+  padding-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cat-list {
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.cat-row:hover {
+  background: var(--bg-hover);
+}
+/* 管理弹窗里的行不可整行点击（div），只有设置分类弹窗的行是按钮 */
+div.cat-row {
+  cursor: default;
+}
+/* 行内编辑 / 删除确认形态：窗口极窄时允许换行 */
+.cat-row-edit {
+  flex-wrap: wrap;
+}
+.cat-row .confirm-text {
+  padding-top: 0;
+  font-size: 13px;
+}
+
+.cat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.cat-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cat-count {
+  font-size: 12px;
+  color: var(--text-dim);
+  flex: none;
+}
+
+.cat-check {
+  display: flex;
+  color: var(--accent);
+  flex: none;
+}
+
+.cat-create {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cat-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.cat-input::placeholder {
+  color: var(--text-dim);
+}
+.cat-input:focus {
+  border-color: var(--accent);
+}
+
+.cat-swatches {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.cat-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  flex: none;
+  transition: transform 0.12s ease;
+}
+.cat-swatch:hover {
+  transform: scale(1.2);
+}
+.cat-swatch.active {
+  box-shadow:
+    0 0 0 2px var(--bg-elev),
+    0 0 0 4px var(--accent);
+}
+
+.cat-empty {
+  padding: 18px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* 弹窗底部把两侧按钮撑开 */
+.flex-spacer {
+  flex: 1;
 }
