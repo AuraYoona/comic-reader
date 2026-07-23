@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IPC } from '@shared/ipc'
-import type { ImportProgress, RendererApi } from '@shared/api'
+import type { ImportProgress, RendererApi, UpdateEvent } from '@shared/api'
 
 function subscribe<T>(channel: string, cb: (payload: T) => void): () => void {
   const listener = (_e: Electron.IpcRendererEvent, payload: T): void => cb(payload)
@@ -37,6 +37,12 @@ const api: RendererApi = {
   setFullscreen: (flag) => ipcRenderer.invoke(IPC.WindowSetFullscreen, flag),
   isFullscreen: () => ipcRenderer.invoke(IPC.WindowIsFullscreen),
   onFullscreenChange: (cb) => subscribe<boolean>(IPC.WindowFullscreenChanged, cb),
+
+  checkForUpdates: () => ipcRenderer.invoke(IPC.UpdateCheck),
+  downloadUpdate: () => ipcRenderer.invoke(IPC.UpdateDownload),
+  installUpdate: () => ipcRenderer.invoke(IPC.UpdateInstall),
+  getAppVersion: () => ipcRenderer.invoke(IPC.UpdateGetVersion),
+  onUpdateEvent: (cb) => subscribe<UpdateEvent>(IPC.UpdateEvent, cb),
 
   pathForFile: (file) => webUtils.getPathForFile(file)
 }

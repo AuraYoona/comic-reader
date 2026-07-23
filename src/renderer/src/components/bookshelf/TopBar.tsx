@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { SortKey } from '@shared/types'
 import DropdownMenu from '@/components/common/DropdownMenu'
+import Select from '@/components/common/Select'
 import { Icon } from '@/components/common/Icon'
 import { resolvedThemeIsDark, useSettings } from '@/store/settings'
 import { UNCATEGORIZED_ID, useLibrary } from '@/store/library'
@@ -17,6 +18,9 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'title', label: '名称' },
   { value: 'addedAt', label: '导入时间' }
 ]
+
+/** 分类筛选里代表“全部”的哨兵值（分类 id 不会是空串） */
+const ALL_CATEGORIES = ''
 
 const SEARCH_DEBOUNCE_MS = 150
 
@@ -108,37 +112,34 @@ export default function TopBar({
       <div className="topbar-actions">
         {categoriesEnabled && (
           <>
-            <label className="sort-box" title="按分类筛选">
+            <div className="sort-box" title="按分类筛选">
               <span className="sort-label">分类</span>
-              <select
-                value={activeCategoryId ?? ''}
-                onChange={(e) => setActiveCategory(e.target.value === '' ? null : e.target.value)}
-              >
-                <option value="">全部</option>
-                <option value={UNCATEGORIZED_ID}>未分类</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <Select
+                ariaLabel="按分类筛选"
+                value={activeCategoryId ?? ALL_CATEGORIES}
+                options={[
+                  { value: ALL_CATEGORIES, label: '全部' },
+                  { value: UNCATEGORIZED_ID, label: '未分类' },
+                  ...categories.map((c) => ({ value: c.id, label: c.name, dot: c.color }))
+                ]}
+                onChange={(v) => setActiveCategory(v === ALL_CATEGORIES ? null : v)}
+              />
+            </div>
             <button className="icon-btn" title="管理分类" onClick={onOpenCategoryManager}>
               <Icon name="tag" size={17} />
             </button>
           </>
         )}
 
-        <label className="sort-box" title="排序方式">
+        <div className="sort-box" title="排序方式">
           <span className="sort-label">排序</span>
-          <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <Select
+            ariaLabel="排序方式"
+            value={sortKey}
+            options={SORT_OPTIONS}
+            onChange={setSortKey}
+          />
+        </div>
 
         <button
           ref={importBtnRef}

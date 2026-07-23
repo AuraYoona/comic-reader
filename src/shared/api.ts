@@ -20,6 +20,15 @@ export interface ImportProgress {
 /** 导入入口：文件夹 / 压缩包 / 批量（选一个根目录，每个子文件夹或压缩包算一本） */
 export type ImportKind = 'folder' | 'archive' | 'batch'
 
+/** 更新状态事件（主进程 → 渲染进程） */
+export type UpdateEvent =
+  | { type: 'checking' }
+  | { type: 'available'; version: string }
+  | { type: 'not-available' }
+  | { type: 'downloading'; percent: number }
+  | { type: 'downloaded'; version: string }
+  | { type: 'error'; message: string }
+
 /**
  * 预加载脚本暴露给渲染进程的 API（window.api）。
  * 预加载实现它，渲染进程只依赖这个类型。
@@ -55,6 +64,15 @@ export interface RendererApi {
   setFullscreen(flag: boolean): Promise<void>
   isFullscreen(): Promise<boolean>
   onFullscreenChange(cb: (fs: boolean) => void): () => void
+
+  /** 立即检查更新；开发模式或便携版下返回 false 表示不可用 */
+  checkForUpdates(): Promise<boolean>
+  /** 下载已发现的新版本，进度通过 onUpdateEvent 推送 */
+  downloadUpdate(): Promise<void>
+  /** 退出并安装已下载的更新 */
+  installUpdate(): Promise<void>
+  getAppVersion(): Promise<string>
+  onUpdateEvent(cb: (e: UpdateEvent) => void): () => void
 
   /** 拖拽导入时把 File 对象换成磁盘路径 */
   pathForFile(file: File): string

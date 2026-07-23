@@ -313,6 +313,80 @@ button {
   color: var(--danger);
 }
 
+/* ---- 自定义下拉选择器（Select） ---- */
+.select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 8px 0 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.15s;
+}
+.select-trigger:hover {
+  background: var(--bg-hover);
+}
+.select-trigger.open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-weak);
+}
+.select-trigger-label {
+  /* 分类名是用户输入，钳制宽度避免撑开顶栏挤压搜索框 */
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-caret {
+  display: flex;
+  color: var(--text-dim);
+  transition: transform 0.18s ease;
+  flex: none;
+}
+.select-trigger.open .select-caret {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu.select-menu {
+  min-width: 0;
+  max-width: 280px;
+  max-height: min(420px, calc(100vh - 24px));
+  overflow-y: auto;
+  /* 滚轮悬停在菜单上时不把滚动链传给书架（否则书架一动菜单就被关掉） */
+  overscroll-behavior: contain;
+}
+.select-list {
+  display: flex;
+  flex-direction: column;
+}
+.dropdown-menu .select-option {
+  padding: 7px 10px;
+}
+.select-option .select-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dropdown-menu .select-option:focus {
+  background: var(--bg-hover);
+  outline: none;
+}
+.dropdown-menu .select-option.selected {
+  background: var(--accent-weak);
+}
+.select-option .select-check {
+  display: flex;
+  color: var(--accent);
+  flex: none;
+  margin-left: 2px;
+}
+
 /* ============================================================
    顶栏
    ============================================================ */
@@ -391,20 +465,6 @@ button {
   gap: 6px;
   font-size: 13px;
   color: var(--text-dim);
-}
-.sort-box select {
-  height: 32px;
-  padding: 0 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--bg-elev);
-  color: var(--text);
-  font-size: 13px;
-  outline: none;
-  cursor: pointer;
-  /* 分类筛选的选项是用户输入的名称，钳制宽度避免撑开顶栏挤压搜索框 */
-  max-width: 168px;
-  text-overflow: ellipsis;
 }
 
 /* ============================================================
@@ -1194,4 +1254,35 @@ div.cat-row {
 /* 弹窗底部把两侧按钮撑开 */
 .flex-spacer {
   flex: 1;
+}
+
+/* ============================================================
+   应用内更新（设置弹窗「关于与更新」）
+   ============================================================ */
+.update-progress {
+  position: relative;
+  width: 160px;
+  height: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+.update-progress-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  opacity: 0.35;
+  transition: width 0.2s ease;
+}
+.update-progress > span {
+  position: relative;
+  display: block;
+  line-height: 22px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.update-error {
+  color: var(--danger, #ef4444);
 }

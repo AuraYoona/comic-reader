@@ -31,6 +31,17 @@ export const IPC = {
   /** invoke: 把漫画加入/移出一个分类（主进程按当前归属决定方向） */
   ComicToggleCategory: 'comic:toggle-category',
 
+  /** invoke: 立即检查更新（返回是否发起了检查，开发模式下不可用） */
+  UpdateCheck: 'update:check',
+  /** invoke: 开始下载已发现的新版本 */
+  UpdateDownload: 'update:download',
+  /** invoke: 退出并安装已下载的更新 */
+  UpdateInstall: 'update:install',
+  /** invoke: 当前应用版本号 */
+  UpdateGetVersion: 'update:get-version',
+  /** event(main→renderer): 更新状态推送（检查中/有新版本/下载进度/下载完成/出错） */
+  UpdateEvent: 'update:event',
+
   WindowSetFullscreen: 'window:set-fullscreen',
   WindowIsFullscreen: 'window:is-fullscreen',
   /** event(main→renderer): 全屏状态变化 */
