@@ -103,6 +103,8 @@ export interface AppSettings {
   cardSize: CardSize
   /** 扩展功能开关（v3 新增），关闭只隐藏入口，不删除任何数据 */
   extensions: Record<ExtensionId, boolean>
+  /** 启动时自动检查更新（仅打包后的安装版生效） */
+  autoCheckUpdates: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -113,7 +115,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openLastOnStartup: false,
   lastOpenedComicId: null,
   cardSize: 'medium',
-  extensions: { categories: false }
+  extensions: { categories: false },
+  autoCheckUpdates: true
 }
 
 /** 单个导入项的结果 */

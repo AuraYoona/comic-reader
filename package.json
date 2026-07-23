@@ -1,8 +1,8 @@
 {
   "name": "comic-reader",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A local comic reader for Windows built with Electron + React + TypeScript.",
-  "author": "ComicReader",
+  "author": "AuraYoona",
   "repository": "github:AuraYoona/comic-reader",
   "license": "MIT",
   "main": "./out/main/index.js",
@@ -19,6 +19,7 @@
     "build:win": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "node-stream-zip": "^1.15.0"
   },
   "devDependencies": {
@@ -37,7 +38,12 @@
     "zustand": "^4.5.5"
   },
   "build": {
-    "appId": "com.example.comicreader",
+    "appId": "com.aurayoona.comicreader",
+    "publish": {
+      "provider": "github",
+      "owner": "AuraYoona",
+      "repo": "comic-reader"
+    },
     "productName": "ComicReader",
     "electronDist": "node_modules/electron/dist",
     "directories": {

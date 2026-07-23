@@ -7,6 +7,7 @@ import { logger } from './lib/logger'
 import { registerComicProtocolHandler, registerComicSchemePrivileges } from './protocol'
 import { db } from './store/db'
 import { windowState } from './store/windowState'
+import { checkForUpdates, initUpdater } from './updater'
 
 // 必须在 app ready 之前注册特权 scheme
 registerComicSchemePrivileges()
@@ -97,6 +98,12 @@ if (!gotLock) {
     registerComicProtocolHandler()
     registerIpcHandlers(() => mainWindow)
     createWindow()
+    initUpdater(() => mainWindow)
+
+    // 启动后延迟几秒再检查更新，避免抢占首屏加载的网络与磁盘
+    if (db.getSettings().autoCheckUpdates) {
+      setTimeout(() => checkForUpdates(), 4000)
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

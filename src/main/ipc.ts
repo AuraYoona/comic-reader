@@ -1,6 +1,6 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
-import { BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type OpenDialogOptions } from 'electron'
 import { IPC } from '@shared/ipc'
 import type { ImportKind } from '@shared/api'
 import {
@@ -16,6 +16,7 @@ import { SourceError, getPageList, invalidateComic, sourceExists } from './archi
 import { expandBatchRoot, importPaths, regenerateCover } from './importer'
 import { logger } from './lib/logger'
 import { db } from './store/db'
+import { checkForUpdates, downloadUpdate, installUpdate } from './updater'
 
 type GetWindow = () => BrowserWindow | null
 
@@ -240,6 +241,13 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
       return db.toggleComicCategory(id, categoryId)
     }
   )
+
+  // ---------- 更新 ----------
+
+  ipcMain.handle(IPC.UpdateCheck, () => checkForUpdates())
+  ipcMain.handle(IPC.UpdateDownload, () => downloadUpdate())
+  ipcMain.handle(IPC.UpdateInstall, () => installUpdate())
+  ipcMain.handle(IPC.UpdateGetVersion, () => app.getVersion())
 
   // ---------- 窗口 ----------
 

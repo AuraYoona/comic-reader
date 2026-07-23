@@ -6,6 +6,7 @@ import { Spinner, Toasts } from '@/components/common/Feedback'
 import { useLibrary } from '@/store/library'
 import { useReader } from '@/store/reader'
 import { applyTheme, useSettings } from '@/store/settings'
+import { useUpdater } from '@/store/updater'
 
 let bootStarted = false // StrictMode 下 effect 会执行两次，启动流程只跑一次
 
@@ -20,6 +21,7 @@ export default function App(): ReactNode {
     const offImport = window.api.onImportProgress((p) =>
       useLibrary.getState().setImportProgress(p)
     )
+    const offUpdate = window.api.onUpdateEvent((e) => useUpdater.getState().handleEvent(e))
     if (!bootStarted) {
       bootStarted = true
       void (async () => {
@@ -39,7 +41,10 @@ export default function App(): ReactNode {
     } else if (readyRef.current) {
       setReady(true)
     }
-    return offImport
+    return () => {
+      offImport()
+      offUpdate()
+    }
   }, [])
 
   // 主题变化实时生效；跟随系统时监听系统切换

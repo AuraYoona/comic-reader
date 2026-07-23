@@ -53,6 +53,7 @@ function sanitizeSettings(raw: unknown): AppSettings {
   if (typeof r.lastOpenedComicId === 'string') s.lastOpenedComicId = r.lastOpenedComicId
   if (r.cardSize === 'small' || r.cardSize === 'medium' || r.cardSize === 'large')
     s.cardSize = r.cardSize
+  if (typeof r.autoCheckUpdates === 'boolean') s.autoCheckUpdates = r.autoCheckUpdates
   if (r.extensions && typeof r.extensions === 'object') {
     const ext = r.extensions as Record<string, unknown>
     // 只认白名单里的扩展 ID，且值必须是布尔
