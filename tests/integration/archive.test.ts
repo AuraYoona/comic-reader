@@ -27,7 +27,14 @@ beforeEach(() => {
 
 afterEach(() => {
   closeAllSources()
-  fs.rmSync(dir, { recursive: true, force: true })
+  // 压缩包句柄的 close() 是异步的（退出时 fire-and-forget 就够用），
+  // Windows 上删目录可能正好撞上还没关完的句柄 —— 用 Node 内建重试兜住；
+  // 真删不掉也不必失败，临时目录交给系统回收
+  try {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  } catch {
+    /* 忽略残留的临时目录 */
+  }
 })
 
 describe('文件夹来源', () => {

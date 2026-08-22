@@ -48,7 +48,13 @@ beforeEach(() => {
 
 afterEach(() => {
   db.flushSync()
-  fs.rmSync(env.userData, { recursive: true, force: true })
+  // Windows 上刚写过的文件可能还被杀软/索引占用，交给 Node 内建重试；
+  // 临时目录残留不必让测试失败
+  try {
+    fs.rmSync(env.userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  } catch {
+    /* 忽略残留的临时目录 */
+  }
 })
 
 describe('初始化', () => {
