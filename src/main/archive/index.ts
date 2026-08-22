@@ -1,35 +1,31 @@
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
-import StreamZip from 'node-stream-zip'
 import type { Comic, SourceType } from '@shared/types'
-import { isImagePath, isJunkEntry, mimeFor } from './utils/images'
-import { naturalCompare } from './utils/naturalSort'
+import { isImagePath, isJunkEntry, mimeFor } from '../utils/images'
+import { naturalCompare } from '../utils/naturalSort'
+import { SourceError, ioError } from './errors'
+import { archiveFormat } from './formats'
+import { rarReader } from './rar'
+import type { ArchiveReader } from './reader'
+import { zipReader } from './zip'
 
-/** 来源相关的可预期错误（路径丢失、压缩包损坏等），消息可直接展示给用户 */
-export class SourceError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'SourceError'
-  }
-}
+export { SourceError } from './errors'
+export {
+  ARCHIVE_EXTS,
+  ARCHIVE_FILTER_EXTS,
+  archiveFormat,
+  isArchivePath,
+  stripArchiveExt
+} from './formats'
 
-/** 把文件系统 errno 翻译成用户能看懂的话 */
-function ioError(err: unknown, fallback: string): SourceError {
-  const code = (err as NodeJS.ErrnoException | null)?.code
-  switch (code) {
-    case 'ENOENT':
-      return new SourceError('文件或文件夹不存在，可能已被移动或删除')
-    case 'EACCES':
-    case 'EPERM':
-      return new SourceError('没有读取权限，请检查文件（夹）的访问权限')
-    case 'EBUSY':
-      return new SourceError('文件正被其他程序占用，请稍后重试')
-    case 'EMFILE':
-    case 'ENFILE':
-      return new SourceError('系统打开的文件过多，请稍后重试')
-    default:
-      return new SourceError(fallback)
-  }
+const READERS: ArchiveReader[] = [zipReader, rarReader]
+
+/** 按扩展名挑选压缩包适配器 */
+function readerFor(sourcePath: string): ArchiveReader {
+  const format = archiveFormat(sourcePath)
+  if (format === 'zip') return zipReader
+  if (format === 'rar') return rarReader
+  throw new SourceError('不支持的压缩包格式（支持 ZIP、CBZ、RAR、CBR）')
 }
 
 /** 来源是否仍然可访问（书架“来源丢失”校验用） */
@@ -40,56 +36,6 @@ export async function sourceExists(sourcePath: string): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-type ZipHandle = InstanceType<typeof StreamZip.async>
-
-// ---------------------------------------------------------------------------
-// ZIP 句柄缓存：阅读时按页读取同一个压缩包，避免每页都重新打开文件。
-// 空闲 60s 或超过上限后关闭。
-// ---------------------------------------------------------------------------
-
-const ZIP_IDLE_MS = 60_000
-const ZIP_MAX_OPEN = 4
-
-interface CachedZip {
-  zip: ZipHandle
-  timer: NodeJS.Timeout
-}
-
-const zipCache = new Map<string, CachedZip>()
-
-function evictZip(file: string): void {
-  const hit = zipCache.get(file)
-  if (!hit) return
-  clearTimeout(hit.timer)
-  zipCache.delete(file)
-  hit.zip.close().catch(() => {})
-}
-
-async function getZip(file: string): Promise<ZipHandle> {
-  const hit = zipCache.get(file)
-  if (hit) {
-    clearTimeout(hit.timer)
-    hit.timer = setTimeout(() => evictZip(file), ZIP_IDLE_MS)
-    return hit.zip
-  }
-  // 超过上限先关掉最旧的（Map 保持插入顺序）
-  while (zipCache.size >= ZIP_MAX_OPEN) {
-    const oldest = zipCache.keys().next().value
-    if (oldest === undefined) break
-    evictZip(oldest)
-  }
-  let zip: ZipHandle
-  try {
-    zip = new StreamZip.async({ file })
-    await zip.entriesCount // 触发中央目录解析，尽早暴露损坏的包
-  } catch {
-    throw new SourceError('无法读取压缩包，文件可能已损坏或不是有效的 ZIP/CBZ')
-  }
-  const timer = setTimeout(() => evictZip(file), ZIP_IDLE_MS)
-  zipCache.set(file, { zip, timer })
-  return zip
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +61,7 @@ async function walkFolderImages(root: string, rel: string, out: string[]): Promi
   }
 }
 
-/** 扫描来源，返回自然排序后的页面条目列表（folder 为相对路径，archive 为 zip 条目名） */
+/** 扫描来源，返回自然排序后的页面条目列表（folder 为相对路径，archive 为压缩包条目名） */
 export async function scanSource(sourceType: SourceType, sourcePath: string): Promise<string[]> {
   let st
   try {
@@ -126,10 +72,11 @@ export async function scanSource(sourceType: SourceType, sourcePath: string): Pr
       throw new SourceError(
         sourceType === 'folder'
           ? `文件夹不存在，可能已被移动或删除：${sourcePath}`
-          : `压缩包不存在，可能已被移动或删除：${sourcePath}`
+          : `压缩包不存在，可能已被移动或删除：${sourcePath}`,
+        sourcePath
       )
     }
-    throw ioError(err, `无法访问：${sourcePath}`)
+    throw ioError(err, `无法访问：${sourcePath}`, sourcePath)
   }
 
   if (sourceType === 'folder') {
@@ -140,12 +87,16 @@ export async function scanSource(sourceType: SourceType, sourcePath: string): Pr
   }
 
   if (!st.isFile()) throw new SourceError('该路径不是文件')
-  const zip = await getZip(sourcePath)
-  const entries = await zip.entries()
-  return Object.values(entries)
+  const entries = await readerFor(sourcePath).list(sourcePath)
+  return entries
     .filter((e) => !e.isDirectory && !isJunkEntry(e.name) && isImagePath(e.name))
     .map((e) => e.name)
     .sort(naturalCompare)
+}
+
+/** 释放某个来源占用的压缩包句柄 */
+export function releaseSource(sourcePath: string): void {
+  if (archiveFormat(sourcePath)) readerFor(sourcePath).release(sourcePath)
 }
 
 /** 读取来源中的单个条目字节 */
@@ -162,19 +113,18 @@ export async function readEntry(
       throw ioError(err, '图片读取失败')
     }
   }
+
+  const reader = readerFor(sourcePath)
   try {
-    const zip = await getZip(sourcePath)
-    const data = await zip.entryData(entry)
-    return { data, mime: mimeFor(entry) }
+    return { data: await reader.read(sourcePath, entry), mime: mimeFor(entry) }
   } catch (err) {
     if (err instanceof SourceError) throw err
     // 句柄可能因文件被替换而失效：丢掉缓存重试一次
-    evictZip(sourcePath)
+    reader.release(sourcePath)
     try {
-      const zip = await getZip(sourcePath)
-      const data = await zip.entryData(entry)
-      return { data, mime: mimeFor(entry) }
-    } catch {
+      return { data: await reader.read(sourcePath, entry), mime: mimeFor(entry) }
+    } catch (retryErr) {
+      if (retryErr instanceof SourceError) throw retryErr
       throw new SourceError('读取压缩包内图片失败，文件可能已损坏')
     }
   }
@@ -212,5 +162,5 @@ export async function readPage(
 
 /** 退出前清理打开的压缩包句柄 */
 export function closeAllSources(): void {
-  for (const file of [...zipCache.keys()]) evictZip(file)
+  for (const reader of READERS) reader.releaseAll()
 }

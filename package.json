@@ -1,6 +1,6 @@
 {
   "name": "comic-reader",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A local comic reader for Windows built with Electron + React + TypeScript.",
   "author": "AuraYoona",
   "repository": "github:AuraYoona/comic-reader",
@@ -12,6 +12,10 @@
     "build": "electron-vite build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "typecheck:node": "tsc --noEmit --composite false -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit --composite false -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -20,9 +24,11 @@
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
-    "node-stream-zip": "^1.15.0"
+    "node-stream-zip": "^1.15.0",
+    "node-unrar-js": "^2.0.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
@@ -30,9 +36,16 @@
     "electron": "^31.3.1",
     "electron-builder": "^24.13.3",
     "electron-vite": "^2.3.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.26",
+    "globals": "^15.15.0",
+    "prettier": "^3.9.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.5.4",
+    "typescript-eslint": "^8.67.0",
     "vite": "^5.4.0",
     "vitest": "^1.6.0",
     "zustand": "^4.5.5"

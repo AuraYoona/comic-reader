@@ -3,19 +3,24 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import type { Comic, ImportResult, SourceType } from '@shared/types'
 import type { ImportProgress } from '@shared/api'
-import { SourceError, readEntry, scanSource } from './archive'
+import { SourceError, isArchivePath, readEntry, scanSource, stripArchiveExt } from './archive'
 import { logger } from './lib/logger'
 import { db } from './store/db'
 import { normalizeForCompare } from './utils/images'
-import { makeCoverThumbnail } from './thumbnail'
-
-const ARCHIVE_RE = /\.(zip|cbz)$/i
+import { redactPath } from './utils/redact'
+import { COVER_THUMB_EXT, makeCoverThumbnail } from './thumbnail'
 
 function failed(p: string, reason: string): ImportResult {
   return { path: p, status: 'failed', reason }
 }
 
-/** 生成封面文件并返回文件名；任何一步失败都返回 null（封面缺失不阻塞导入） */
+/**
+ * 生成封面文件并返回文件名；任何一步失败都返回 null（封面缺失不阻塞导入）。
+ *
+ * nativeImage 解不了的格式（WebP / AVIF / GIF）会先把原图直存下来，
+ * 文件名保留原扩展名 —— 书架加载后会由渲染进程用 canvas 重压成 .jpg 缩略图，
+ * 避免几 MB 的原图长期当封面用。
+ */
 async function generateCover(
   fileBase: string,
   sourceType: SourceType,
@@ -25,13 +30,13 @@ async function generateCover(
   try {
     const { data } = await readEntry(sourceType, sourcePath, firstPage)
     const thumb = makeCoverThumbnail(data)
-    const ext = thumb ? '.jpg' : path.extname(firstPage).toLowerCase()
+    const ext = thumb ? COVER_THUMB_EXT : path.extname(firstPage).toLowerCase()
     const fileName = `${fileBase}${ext}`
     await fsp.mkdir(db.coversDir(), { recursive: true })
     await fsp.writeFile(path.join(db.coversDir(), fileName), thumb ?? data)
     return fileName
   } catch (err) {
-    logger.warn('importer', `生成封面失败：${sourcePath}`, err)
+    logger.warn('importer', `生成封面失败：${redactPath(sourcePath)}`, err)
     return null
   }
 }
@@ -61,8 +66,8 @@ async function importOne(rawPath: string, seenInBatch: Set<string>): Promise<Imp
 
     let sourceType: SourceType
     if (st.isDirectory()) sourceType = 'folder'
-    else if (st.isFile() && ARCHIVE_RE.test(sourcePath)) sourceType = 'archive'
-    else return failed(sourcePath, '不支持的文件类型（支持文件夹、ZIP、CBZ）')
+    else if (st.isFile() && isArchivePath(sourcePath)) sourceType = 'archive'
+    else return failed(sourcePath, '不支持的文件类型（支持文件夹与 ZIP / CBZ / RAR / CBR）')
 
     const norm = normalizeForCompare(sourcePath)
     if (seenInBatch.has(norm)) return { path: sourcePath, status: 'skipped', reason: '重复选择' }
@@ -83,7 +88,7 @@ async function importOne(rawPath: string, seenInBatch: Set<string>): Promise<Imp
 
     const id = randomUUID()
     const base = path.basename(sourcePath)
-    const title = sourceType === 'archive' ? base.replace(ARCHIVE_RE, '') : base
+    const title = sourceType === 'archive' ? stripArchiveExt(base) : base
     const coverFile = await generateCover(id, sourceType, sourcePath, pages[0])
 
     const comic: Comic = {
@@ -97,8 +102,9 @@ async function importOne(rawPath: string, seenInBatch: Set<string>): Promise<Imp
       lastReadAt: null,
       lastReadPage: 0,
       reader: {},
-      // 新导入的漫画不属于任何分类
-      categoryIds: []
+      // 新导入的漫画不属于任何分类，也没有书签
+      categoryIds: [],
+      bookmarks: []
     }
     db.upsertComic(comic)
     return { path: sourcePath, status: 'imported', comic }
@@ -124,7 +130,10 @@ export async function importPaths(
   }
   const imported = results.filter((r) => r.status === 'imported').length
   const failed = results.filter((r) => r.status === 'failed').length
-  logger.info('importer', `导入完成：成功 ${imported}，跳过 ${results.length - imported - failed}，失败 ${failed}`)
+  logger.info(
+    'importer',
+    `导入完成：成功 ${imported}，跳过 ${results.length - imported - failed}，失败 ${failed}`
+  )
   return results
 }
 
@@ -137,10 +146,18 @@ export async function expandBatchRoot(root: string): Promise<string[] | null> {
     const entries = await fsp.readdir(root, { withFileTypes: true })
     return entries
       .filter((e) => !e.name.startsWith('.'))
-      .filter((e) => e.isDirectory() || (e.isFile() && ARCHIVE_RE.test(e.name)))
+      .filter((e) => e.isDirectory() || (e.isFile() && isArchivePath(e.name)))
       .map((e) => path.join(root, e.name))
   } catch (err) {
-    logger.warn('importer', `批量导入：无法读取根目录 ${root}`, err)
+    logger.warn('importer', `批量导入：无法读取根目录 ${redactPath(root)}`, err)
     return null
   }
+}
+
+/** 根目录下还没进书架的子项（库根目录增量扫描用） */
+export async function findUnimportedInRoot(root: string): Promise<string[] | null> {
+  const targets = await expandBatchRoot(root)
+  if (targets === null) return null
+  const known = new Set(db.listComics().map((c) => normalizeForCompare(c.sourcePath)))
+  return targets.filter((p) => !known.has(normalizeForCompare(p)))
 }

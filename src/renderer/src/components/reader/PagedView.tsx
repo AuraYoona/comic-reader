@@ -1,26 +1,25 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode
-} from 'react'
-import PageImage from '@/components/reader/PageImage'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { isWideSize, spreadAt } from '@shared/paging'
+import ReaderPage from '@/components/reader/ReaderPage'
 import { prefetchImage } from '@/lib/pageCache'
 import { useReader } from '@/store/reader'
+import { useSettings } from '@/store/settings'
 import { pageUrl } from '@/utils/comicUrl'
 
 const WHEEL_FLIP_COOLDOWN_MS = 170
 const PAGE_GAP = 8
 const SLOW_LOAD_HINT_MS = 200
 const DRAG_THRESHOLD_PX = 5
+/** 鼠标侧键：3 = 后退，4 = 前进 */
+const MOUSE_BACK = 3
+const MOUSE_FORWARD = 4
 
 /**
  * 单页 / 双页视图。
+ * - 双页按「封面单独占屏」的偏移配对，横向跨页图自动铺满整屏
  * - 相邻页用 img.decode() 提前解码，翻页零白屏
  * - 缩放超出视口时可滚动 + 按住拖拽平移；滚轮在页面边缘才翻页
- * - 点击左/右 1/3 区域翻页（尊重阅读方向），中间切换工具栏
+ * - 点击左/右 1/3 区域翻页（尊重阅读方向），中间切换工具栏；鼠标侧键也可翻页
  * - 当前页 200ms 内没加载完显示轻量加载指示
  */
 export default function PagedView({ onToggleBars }: { onToggleBars: () => void }): ReactNode {
@@ -31,6 +30,12 @@ export default function PagedView({ onToggleBars }: { onToggleBars: () => void }
   const zoom = useReader((s) => s.zoom)
   const scale = useReader((s) => s.scale)
   const direction = useReader((s) => s.direction)
+  const pageOffset = useReader((s) => s.pageOffset)
+  const autoCrop = useReader((s) => s.autoCrop)
+  const widePages = useReader((s) => s.widePages)
+  const markWide = useReader((s) => s.markWide)
+  const widePageSpread = useSettings((s) => s.settings.widePageSpread)
+  const mouseSideButtons = useSettings((s) => s.settings.mouseSideButtons)
 
   const viewportRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -43,9 +48,18 @@ export default function PagedView({ onToggleBars }: { onToggleBars: () => void }
 
   const double = mode === 'double'
   const indices = useMemo(() => {
-    const list = double ? [page, page + 1] : [page]
-    return list.filter((i) => i >= 0 && i < pageCount)
-  }, [double, page, pageCount])
+    if (!double) return page >= 0 && page < pageCount ? [page] : []
+    return spreadAt(page, {
+      pageCount,
+      offset: pageOffset,
+      isWide: widePageSpread ? (i) => widePages.has(i) : undefined
+    })
+  }, [double, page, pageCount, pageOffset, widePages, widePageSpread])
+
+  const onNatural = useCallback(
+    (index: number, w: number, h: number) => markWide(index, isWideSize(w, h)),
+    [markWide]
+  )
 
   // 视口尺寸（fitWidth/fitHeight 的基准）
   useEffect(() => {
@@ -81,7 +95,7 @@ export default function PagedView({ onToggleBars }: { onToggleBars: () => void }
     setSlowLoading(false)
   }, [])
 
-  // 相邻页预取 + 预解码
+  // 相邻页预取 + 预解码（双页一次跨两页，往前多取一点）
   useEffect(() => {
     const around = double ? [2, 3, -2, -1, 4, 5] : [1, 2, -1, 3]
     for (const d of around) {
@@ -127,14 +141,20 @@ export default function PagedView({ onToggleBars }: { onToggleBars: () => void }
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  // 按住拖拽平移（放大后内容超出视口时）
+  // 按住拖拽平移（放大后内容超出视口时）；鼠标侧键翻页
   const onMouseDown = (e: React.MouseEvent): void => {
+    if (mouseSideButtons && (e.button === MOUSE_BACK || e.button === MOUSE_FORWARD)) {
+      e.preventDefault()
+      const store = useReader.getState()
+      const forward = e.button === MOUSE_FORWARD
+      forward ? store.next() : store.prev()
+      return
+    }
     if (e.button !== 0) return
     downPosRef.current = { x: e.clientX, y: e.clientY }
     const el = viewportRef.current
     if (!el) return
-    const scrollable =
-      el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 2
+    const scrollable = el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 2
     if (!scrollable) return
 
     const start = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop }
@@ -177,7 +197,7 @@ export default function PagedView({ onToggleBars }: { onToggleBars: () => void }
     }
   }
 
-  const perPageW = double ? Math.floor((box.w - PAGE_GAP) / 2) : box.w
+  const perPageW = indices.length > 1 ? Math.floor((box.w - PAGE_GAP) / 2) : box.w
 
   return (
     <div
@@ -185,24 +205,28 @@ export default function PagedView({ onToggleBars }: { onToggleBars: () => void }
       className={panning ? 'paged-viewport panning' : 'paged-viewport'}
       onMouseDown={onMouseDown}
       onClick={onClick}
+      // 侧键默认会触发前进/后退手势，这里一并吞掉
+      onAuxClick={(e) => mouseSideButtons && e.button > 2 && e.preventDefault()}
     >
       <div
         className="paged-canvas"
         style={{
-          flexDirection: double && direction === 'rtl' ? 'row-reverse' : 'row',
+          flexDirection: indices.length > 1 && direction === 'rtl' ? 'row-reverse' : 'row',
           gap: PAGE_GAP
         }}
       >
         {indices.map((i, order) => (
-          <PageImage
+          <ReaderPage
             key={`${comic.id}-${i}`}
-            src={pageUrl(comic.id, i)}
-            alt={`第 ${i + 1} 页`}
+            comicId={comic.id}
+            index={i}
             fit={zoom}
             scale={scale}
             boxW={perPageW}
             boxH={box.h}
+            autoCrop={autoCrop}
             eager
+            onNatural={onNatural}
             onSettled={order === 0 ? onFirstSettled : undefined}
           />
         ))}

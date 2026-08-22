@@ -1,6 +1,6 @@
 name: CI
 
-# 日常提交的质量门禁：类型检查 + 单元测试 + 构建可通过
+# 日常提交的质量门禁：格式 + lint + 类型检查 + 单元测试 + 构建可通过
 on:
   push:
     branches: [main]
@@ -16,6 +16,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm test
       - run: npx electron-vite build
