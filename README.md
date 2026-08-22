@@ -129,20 +129,7 @@ logs/main.log       主进程日志（>2MB 自动轮转）
 | 数据安全             | 写临时文件再改名（原子性）+ 退出强制落盘 + 解析失败备份自愈 + 版本化迁移                           |
 | 进程安全             | sandbox + contextIsolation + CSP + 拒绝一切导航/弹窗/Web 权限 + 封面路径越界防护 + 回传字节类型校验 |
 
-## 🛠️ 开发
 
-```bash
-npm install
-npm run dev          # 开发模式
-npm run build:win    # 打包安装版 + 便携版
-
-npm run lint         # ESLint
-npm run format       # Prettier
-npm run typecheck    # 主进程 + 渲染进程分别做类型检查
-npm test             # Vitest（122 个用例）
-```
-
-CI 的质量门禁：`format:check` → `lint` → `typecheck` → `test` → `build`。
 
 ## 🗺️ Roadmap
 
