@@ -17,7 +17,11 @@ export function relativeTime(ts: number | null): string {
 }
 
 /** 阅读百分比（0-100 的整数）。未读返回 0。 */
-export function readPercent(lastReadAt: number | null, lastReadPage: number, pageCount: number): number {
+export function readPercent(
+  lastReadAt: number | null,
+  lastReadPage: number,
+  pageCount: number
+): number {
   if (!lastReadAt || pageCount <= 0) return 0
   return Math.min(100, Math.round(((lastReadPage + 1) / pageCount) * 100))
 }

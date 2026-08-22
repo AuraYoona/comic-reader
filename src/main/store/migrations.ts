@@ -9,9 +9,11 @@
  *   v1  MVP：{ version, settings, comics }
  *   v2  settings 增加 cardSize（书架卡片大小）
  *   v3  settings 增加 extensions（扩展开关）、顶层增加 categories（分类集合）、comic 增加 categoryIds
+ *   v4  comic 增加 bookmarks；settings 增加阅读器增强项（双页封面/跨页、亮度、自动翻页、
+ *       侧键翻页、自动裁边）与库根目录（libraryRoots / autoScanRoots）；extensions 增加 bookmarks
  */
 
-export const CURRENT_SCHEMA_VERSION = 3
+export const CURRENT_SCHEMA_VERSION = 4
 
 type AnyRecord = Record<string, unknown>
 
@@ -42,6 +44,29 @@ const MIGRATIONS: Record<number, (data: AnyRecord) => AnyRecord> = {
       settings: { extensions: { categories: false }, ...settings },
       categories: Array.isArray(data.categories) ? data.categories : [],
       comics: comics.map((c) => (c && typeof c === 'object' ? { categoryIds: [], ...c } : c))
+    }
+  },
+  3: (data) => {
+    const settings = (data.settings ?? {}) as AnyRecord
+    const extensions = (settings.extensions ?? {}) as AnyRecord
+    const comics = Array.isArray(data.comics) ? data.comics : []
+    return {
+      ...data,
+      version: 4,
+      // 默认值放前面：老数据里已有同名字段时以老数据为准（extensions 要逐键合并，不能整体覆盖）
+      settings: {
+        doubleCoverSingle: true,
+        widePageSpread: true,
+        brightness: 1,
+        autoTurnSeconds: 6,
+        mouseSideButtons: true,
+        autoCrop: false,
+        libraryRoots: [],
+        autoScanRoots: true,
+        ...settings,
+        extensions: { bookmarks: false, ...extensions }
+      },
+      comics: comics.map((c) => (c && typeof c === 'object' ? { bookmarks: [], ...c } : c))
     }
   }
 }

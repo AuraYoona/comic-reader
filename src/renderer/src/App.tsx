@@ -18,9 +18,7 @@ export default function App(): ReactNode {
 
   // 启动：加载设置和书架 → 按需自动打开上次阅读的漫画
   useEffect(() => {
-    const offImport = window.api.onImportProgress((p) =>
-      useLibrary.getState().setImportProgress(p)
-    )
+    const offImport = window.api.onImportProgress((p) => useLibrary.getState().setImportProgress(p))
     const offUpdate = window.api.onUpdateEvent((e) => useUpdater.getState().handleEvent(e))
     if (!bootStarted) {
       bootStarted = true
@@ -37,6 +35,10 @@ export default function App(): ReactNode {
         }
         readyRef.current = true
         setReady(true)
+        // 书架先画出来，再去扫库根目录（可能要读很多磁盘），没新东西时静默
+        if (settings.autoScanRoots && settings.libraryRoots.length > 0) {
+          window.setTimeout(() => void useLibrary.getState().scanRoots({ silent: true }), 1200)
+        }
       })()
     } else if (readyRef.current) {
       setReady(true)

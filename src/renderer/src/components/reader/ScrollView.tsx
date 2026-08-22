@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import PageImage from '@/components/reader/PageImage'
+import ReaderPage from '@/components/reader/ReaderPage'
+import { scrollBus } from '@/lib/scrollBus'
 import { useReader } from '@/store/reader'
-import { pageUrl } from '@/utils/comicUrl'
-
-/** ScrollView 挂载时把滚动方法注册到这里，键盘（空格/方向键）滚动用 */
-export const scrollBus: { scrollByViewport: ((fraction: number) => void) | null } = {
-  scrollByViewport: null
-}
+import { useSettings } from '@/store/settings'
 
 const LOAD_MARGIN = '1800px 0px' // 视口上下各预载约 2 屏
 const CURRENT_BAND = '-45% 0px -54.9% 0px' // 穿过屏幕中线的页算作当前页
+/** 鼠标侧键：3 = 后退，4 = 前进 */
+const MOUSE_BACK = 3
+const MOUSE_FORWARD = 4
 
 /**
  * 长条连续滚动视图。
@@ -23,6 +22,8 @@ export default function ScrollView({ onToggleBars }: { onToggleBars: () => void 
   const pageCount = useReader((s) => s.pageCount)
   const zoom = useReader((s) => s.zoom)
   const scale = useReader((s) => s.scale)
+  const autoCrop = useReader((s) => s.autoCrop)
+  const mouseSideButtons = useSettings((s) => s.settings.mouseSideButtons)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const slotEls = useRef(new Map<number, HTMLDivElement>())
@@ -113,7 +114,6 @@ export default function ScrollView({ onToggleBars }: { onToggleBars: () => void 
       slotEls.current.get(target)?.scrollIntoView({ block: 'start' })
     }, 350)
     return () => window.clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comic.id])
 
   // 注册键盘滚动 + Ctrl+滚轮缩放
@@ -137,6 +137,14 @@ export default function ScrollView({ onToggleBars }: { onToggleBars: () => void 
   }, [])
 
   const onMouseDown = (e: React.MouseEvent): void => {
+    if (mouseSideButtons && (e.button === MOUSE_BACK || e.button === MOUSE_FORWARD)) {
+      e.preventDefault()
+      const store = useReader.getState()
+      // 滚动模式下侧键按屏滚动，比逐页跳更符合直觉
+      scrollBus.scrollByViewport?.(e.button === MOUSE_FORWARD ? 0.85 : -0.85)
+      store.clearEndHint()
+      return
+    }
     downPosRef.current = { x: e.clientX, y: e.clientY }
   }
   const onClick = (e: React.MouseEvent): void => {
@@ -149,7 +157,13 @@ export default function ScrollView({ onToggleBars }: { onToggleBars: () => void 
     zoom === 'fitWidth' ? Math.round(box.w * Math.min(scale, 1)) : Math.round(box.w * 0.7)
 
   return (
-    <div ref={containerRef} className="scroll-view" onMouseDown={onMouseDown} onClick={onClick}>
+    <div
+      ref={containerRef}
+      className="scroll-view"
+      onMouseDown={onMouseDown}
+      onClick={onClick}
+      onAuxClick={(e) => mouseSideButtons && e.button > 2 && e.preventDefault()}
+    >
       {Array.from({ length: pageCount }, (_, i) => (
         <div
           key={i}
@@ -161,13 +175,14 @@ export default function ScrollView({ onToggleBars }: { onToggleBars: () => void 
           }}
         >
           {loaded.has(i) ? (
-            <PageImage
-              src={pageUrl(comic.id, i)}
-              alt={`第 ${i + 1} 页`}
+            <ReaderPage
+              comicId={comic.id}
+              index={i}
               fit={zoom}
               scale={scale}
               boxW={box.w}
               boxH={box.h}
+              autoCrop={autoCrop}
               eager
             />
           ) : (

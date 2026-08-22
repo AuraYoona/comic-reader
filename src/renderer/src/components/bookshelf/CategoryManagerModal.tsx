@@ -154,7 +154,11 @@ export default function CategoryManagerModal({ onClose }: { onClose: () => void 
                 <span className="cat-dot" style={{ background: cat.color }} />
                 <span className="cat-name">{cat.name}</span>
                 <span className="cat-count">{count} 本</span>
-                <button className="icon-btn icon-btn-sm" title="重命名" onClick={() => startEdit(cat)}>
+                <button
+                  className="icon-btn icon-btn-sm"
+                  title="重命名"
+                  onClick={() => startEdit(cat)}
+                >
                   <Icon name="edit" size={14} />
                 </button>
                 <button

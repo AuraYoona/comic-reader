@@ -5,10 +5,12 @@
     <!--
       本地桌面应用，从不加载远程内容。
       script-src 里的 'unsafe-inline' 仅为开发期 vite/react-refresh 注入的内联脚本放行。
+      connect-src 里的 comic: 用于自动裁边与封面重压：这两件事要把图片画进 canvas，
+      必须先 fetch 出字节再走 blob，直接用跨源的 <img> 会污染画布。
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' comic: data: blob:; connect-src 'self' ws://localhost:* http://localhost:*; font-src 'self' data:"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' comic: data: blob:; connect-src 'self' comic: blob: ws://localhost:* http://localhost:*; font-src 'self' data:"
     />
     <title>漫画阅读器</title>
   </head>

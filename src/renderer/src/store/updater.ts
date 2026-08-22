@@ -3,13 +3,7 @@ import type { UpdateEvent } from '@shared/api'
 import { useUi } from './ui'
 
 export type UpdateStatus =
-  | 'idle'
-  | 'checking'
-  | 'available'
-  | 'not-available'
-  | 'downloading'
-  | 'downloaded'
-  | 'error'
+  'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
 
 interface UpdaterState {
   status: UpdateStatus

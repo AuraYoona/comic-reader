@@ -5,14 +5,18 @@ describe('isImagePath', () => {
   it('识别支持的扩展名（大小写不敏感）', () => {
     expect(isImagePath('a.jpg')).toBe(true)
     expect(isImagePath('a.JPEG')).toBe(true)
+    expect(isImagePath('a.jfif')).toBe(true)
     expect(isImagePath('a.png')).toBe(true)
     expect(isImagePath('a.webp')).toBe(true)
     expect(isImagePath('a.gif')).toBe(true)
+    expect(isImagePath('a.avif')).toBe(true)
+    expect(isImagePath('a.BMP')).toBe(true)
   })
 
   it('拒绝不支持的类型', () => {
     expect(isImagePath('a.txt')).toBe(false)
     expect(isImagePath('a.pdf')).toBe(false)
+    expect(isImagePath('a.jxl')).toBe(false)
     expect(isImagePath('a.jpg.exe')).toBe(false)
     expect(isImagePath('noext')).toBe(false)
   })
@@ -35,8 +39,11 @@ describe('isJunkEntry', () => {
 describe('mimeFor', () => {
   it('返回正确的 MIME', () => {
     expect(mimeFor('x.jpg')).toBe('image/jpeg')
+    expect(mimeFor('x.jfif')).toBe('image/jpeg')
     expect(mimeFor('x.PNG')).toBe('image/png')
     expect(mimeFor('x.webp')).toBe('image/webp')
+    expect(mimeFor('x.avif')).toBe('image/avif')
+    expect(mimeFor('x.bmp')).toBe('image/bmp')
     expect(mimeFor('x.bin')).toBe('application/octet-stream')
   })
 })

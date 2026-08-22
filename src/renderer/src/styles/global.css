@@ -148,7 +148,9 @@ button {
   background: var(--bg-elev);
   font-size: 13px;
   line-height: 1;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
   white-space: nowrap;
 }
 .btn:hover {
@@ -194,7 +196,9 @@ button {
   height: 32px;
   border-radius: var(--radius-sm);
   color: var(--text-dim);
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
   flex: none;
 }
 .icon-btn:hover {
@@ -219,7 +223,9 @@ button {
   border-radius: 4px;
   font-size: 12.5px;
   color: var(--text-dim);
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
   white-space: nowrap;
 }
 .seg-item:hover {
@@ -326,7 +332,10 @@ button {
   color: var(--text);
   font-size: 13px;
   line-height: 1;
-  transition: background 0.12s, border-color 0.12s, box-shadow 0.15s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    box-shadow 0.15s;
 }
 .select-trigger:hover {
   background: var(--bg-hover);
@@ -504,7 +513,9 @@ button {
   overflow: hidden;
   background: var(--placeholder-bg);
   box-shadow: var(--card-shadow);
-  transition: box-shadow 0.15s, transform 0.15s;
+  transition:
+    box-shadow 0.15s,
+    transform 0.15s;
 }
 .card:hover .card-cover {
   box-shadow: var(--card-shadow-hover);
@@ -923,7 +934,9 @@ button {
   padding: 10px 14px;
   background: var(--glass-bg);
   backdrop-filter: blur(20px) saturate(1.5);
-  transition: transform 0.22s ease, opacity 0.22s ease;
+  transition:
+    transform 0.22s ease,
+    opacity 0.22s ease;
 }
 .reader-bar-top {
   top: 0;
@@ -1046,6 +1059,8 @@ button {
   display: block;
   background: var(--placeholder-bg);
   box-shadow: 0 0 24px rgba(0, 0, 0, 0.25);
+  /* 亮度滤镜只作用在漫画页上，工具栏保持原色；变量由 Reader 内联注入 */
+  filter: brightness(var(--reader-brightness, 1));
 }
 
 .page-loading {
@@ -1285,4 +1300,298 @@ div.cat-row {
 }
 .update-error {
   color: var(--danger, #ef4444);
+}
+
+/* ============================================================
+   书架多选与批量操作
+   ============================================================ */
+.card.selected .card-cover {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 多选时不再提示「开始阅读」，点击的语义是选中 */
+.card.selected .card-hover {
+  opacity: 0;
+}
+
+.card-select {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 26px;
+  height: 26px;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 3;
+}
+.card:hover .card-select,
+.card-select.shown,
+.card-select:focus-visible {
+  opacity: 1;
+}
+.card-select:hover {
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+}
+
+/* 批量操作条浮在书架底部，书架内容留出等高的空档 */
+.shelf-body.with-selection {
+  padding-bottom: 76px;
+}
+
+.selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 85;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  max-width: calc(100vw - 32px);
+  flex-wrap: wrap;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-shadow-hover);
+  animation: toast-in 0.18s ease-out;
+}
+.selection-count {
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.selection-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  flex: none;
+}
+.btn.danger-text {
+  color: var(--danger);
+}
+
+/* 下拉菜单里的分组标题 */
+.dropdown-section {
+  padding: 8px 11px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+/* ============================================================
+   重命名弹窗
+   ============================================================ */
+.rename-field {
+  margin-top: 12px;
+}
+.rename-field .cat-input {
+  width: 100%;
+  height: 34px;
+}
+.rename-hint {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* ============================================================
+   设置：滑块、按钮组、库根目录
+   ============================================================ */
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.settings-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  width: 200px;
+}
+.settings-range .reader-slider {
+  flex: 1;
+}
+.settings-range-value {
+  min-width: 46px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.root-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.root-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.root-row:hover {
+  background: var(--bg-hover);
+}
+.root-path {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl; /* 路径太长时优先保留末尾的目录名 */
+  text-align: left;
+}
+
+/* ============================================================
+   阅读器：页码输入、书签、缩略图条、末页提示
+   ============================================================ */
+.reader-pageinfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.page-input {
+  width: 3.4em;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  outline: none;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+.page-input:hover {
+  background: var(--bg-hover);
+}
+.page-input:focus {
+  background: var(--bg-elev);
+  border-color: var(--accent);
+}
+.page-total {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 处于开启状态的工具栏按钮 */
+.icon-btn.active,
+.btn-ghost.active {
+  background: var(--accent-weak);
+  color: var(--accent);
+}
+
+.thumb-strip {
+  width: 100%;
+  padding-bottom: 2px;
+}
+.thumb-rail {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.thumb-track {
+  position: relative;
+  height: 108px;
+}
+.thumb-item {
+  position: absolute;
+  top: 0;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--placeholder-bg);
+  transition:
+    border-color 0.12s,
+    transform 0.12s;
+}
+.thumb-item:hover {
+  transform: translateY(-2px);
+}
+.thumb-item.current {
+  border-color: var(--accent);
+}
+.thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.thumb-no {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2px 0 3px;
+  background: rgba(15, 15, 20, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.thumb-bookmark {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.reader-end-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 12px 22px;
+  border-radius: var(--radius);
+  background: var(--glass-strong);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-shadow-hover);
+  pointer-events: none;
+  animation: toast-in 0.18s ease-out;
+}
+.reader-end-hint strong {
+  font-size: 14px;
+}
+.reader-end-hint span {
+  font-size: 11.5px;
+  color: var(--text-dim);
 }

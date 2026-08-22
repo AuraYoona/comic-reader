@@ -131,7 +131,9 @@ export default function DropdownMenu({
     // portal 的合成事件仍会沿 React 树冒泡到卡片，必须拦下，否则点菜单项会顺带打开漫画
     <div
       ref={menuRef}
-      className={className ? `dropdown-menu dropdown-portal ${className}` : 'dropdown-menu dropdown-portal'}
+      className={
+        className ? `dropdown-menu dropdown-portal ${className}` : 'dropdown-menu dropdown-portal'
+      }
       style={style}
       role={role}
       onClick={(e) => e.stopPropagation()}

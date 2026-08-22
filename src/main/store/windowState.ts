@@ -62,7 +62,8 @@ class WindowStateStore {
     return this.state.maximized
   }
 
-  private isOnScreen(x: number, y: number, w: number, h: number): boolean {
+  /** 高度不参与判断：只要标题栏落在某块显示器的工作区内就算可见 */
+  private isOnScreen(x: number, y: number, w: number, _h: number): boolean {
     return screen.getAllDisplays().some((d) => {
       const a = d.workArea
       return (

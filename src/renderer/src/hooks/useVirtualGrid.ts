@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type RefObject
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 
 interface VirtualGridOptions {
   /** 条目总数 */
@@ -57,9 +50,7 @@ export function useVirtualGrid({
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const ro = new ResizeObserver(() =>
-      setViewport({ w: el.clientWidth, h: el.clientHeight })
-    )
+    const ro = new ResizeObserver(() => setViewport({ w: el.clientWidth, h: el.clientHeight }))
     ro.observe(el)
     setViewport({ w: el.clientWidth, h: el.clientHeight })
     return () => ro.disconnect()

@@ -33,14 +33,23 @@ class Logger {
     }
   }
 
+  /**
+   * 把错误渲染成一行日志。
+   *
+   * 带 logMessage 的错误（SourceError）用它的脱敏文案 —— 原始 message 里嵌了
+   * 用户的漫画路径，那是给界面看的，不该落到可能被分享出去的日志里。
+   * 其余错误照常打堆栈：里面只有本应用的源码位置。
+   */
+  private describe(err: unknown): string {
+    if (err === undefined) return ''
+    const redacted = (err as { logMessage?: unknown } | null)?.logMessage
+    if (typeof redacted === 'string') return ` :: ${redacted}`
+    if (err instanceof Error) return ` :: ${err.stack ?? err.message}`
+    return ` :: ${String(err)}`
+  }
+
   private write(level: Level, scope: string, msg: string, err?: unknown): void {
-    const detail =
-      err instanceof Error
-        ? ` :: ${err.stack ?? err.message}`
-        : err !== undefined
-          ? ` :: ${String(err)}`
-          : ''
-    const line = `[${new Date().toISOString()}] [${level}] [${scope}] ${msg}${detail}`
+    const line = `[${new Date().toISOString()}] [${level}] [${scope}] ${msg}${this.describe(err)}`
     if (level === 'ERROR') console.error(line)
     else if (level === 'WARN') console.warn(line)
     else console.log(line)

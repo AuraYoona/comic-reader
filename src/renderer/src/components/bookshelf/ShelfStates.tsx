@@ -13,7 +13,7 @@ export function EmptyShelf(): ReactNode {
         <Icon name="book" size={44} />
       </div>
       <h2>书架还是空的</h2>
-      <p>导入本地漫画文件夹或 ZIP / CBZ 压缩包开始阅读，也可以直接把它们拖进窗口。</p>
+      <p>导入本地漫画文件夹或 ZIP / CBZ / RAR / CBR 压缩包开始阅读，也可以直接把它们拖进窗口。</p>
       <div className="state-actions">
         <button className="btn btn-primary" onClick={() => void importFrom('folder')}>
           <Icon name="folder" size={15} />
@@ -47,7 +47,9 @@ export function NoResults({
           <Icon name="tag" size={40} />
         </div>
         <h2>{uncategorized ? '没有未分类的漫画' : `「${categoryLabel}」分类下还没有漫画`}</h2>
-        <p>{uncategorized ? '每本漫画都已加入分类。' : '在卡片菜单中选择「设置分类…」即可加入。'}</p>
+        <p>
+          {uncategorized ? '每本漫画都已加入分类。' : '在卡片菜单中选择「设置分类…」即可加入。'}
+        </p>
       </div>
     )
   }
@@ -79,7 +81,7 @@ export function ShelfSkeleton(): ReactNode {
   )
 }
 
-/** 导入进行中的悬浮提示 */
+/** 导入 / 批量重新扫描进行中的悬浮提示 */
 export function ImportingToast(): ReactNode {
   const importing = useLibrary((s) => s.importing)
   if (!importing.active) return null
@@ -90,12 +92,12 @@ export function ImportingToast(): ReactNode {
         {importing.total > 0 ? (
           <>
             <span>
-              正在导入 {importing.current} / {importing.total}
+              正在{importing.label} {importing.current} / {importing.total}
             </span>
             <span className="importing-path">{basename(importing.path)}</span>
           </>
         ) : (
-          <span>正在导入…</span>
+          <span>正在{importing.label}…</span>
         )}
       </div>
     </div>

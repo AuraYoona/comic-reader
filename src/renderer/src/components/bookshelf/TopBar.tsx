@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { SortKey } from '@shared/types'
 import DropdownMenu from '@/components/common/DropdownMenu'
 import Select from '@/components/common/Select'
@@ -57,7 +50,6 @@ export default function TopBar({
   // 外部清空（例如“清除搜索”按钮）时同步回输入框
   useEffect(() => {
     setText(query)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
 
   const [importOpen, setImportOpen] = useState(false)
@@ -151,14 +143,19 @@ export default function TopBar({
           导入
           <Icon name="chevron-down" size={13} />
         </button>
-        <DropdownMenu open={importOpen} anchorRef={importBtnRef} align="right" onClose={closeImport}>
+        <DropdownMenu
+          open={importOpen}
+          anchorRef={importBtnRef}
+          align="right"
+          onClose={closeImport}
+        >
           <button onClick={() => runImport('folder')}>
             <Icon name="folder" size={15} />
             导入文件夹…
           </button>
           <button onClick={() => runImport('archive')}>
             <Icon name="archive" size={15} />
-            导入压缩包（ZIP / CBZ）…
+            导入压缩包（ZIP / CBZ / RAR / CBR）…
           </button>
           <button onClick={() => runImport('batch')}>
             <Icon name="folder-open" size={15} />

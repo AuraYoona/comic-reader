@@ -26,6 +26,18 @@ export type IconName =
   | 'tag'
   | 'check'
   | 'edit'
+  | 'bookmark'
+  | 'bookmark-filled'
+  | 'film'
+  | 'clock'
+  | 'pause'
+  | 'crop'
+  | 'columns'
+  | 'check-square'
+  | 'square'
+  | 'move'
+  | 'download'
+  | 'upload'
 
 const PATHS: Record<IconName, ReactElement> = {
   search: (
@@ -34,9 +46,7 @@ const PATHS: Record<IconName, ReactElement> = {
       <line x1="21" y1="21" x2="16.5" y2="16.5" />
     </>
   ),
-  folder: (
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-  ),
+  folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
   'folder-open': (
     <>
       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v1" />
@@ -162,7 +172,77 @@ const PATHS: Record<IconName, ReactElement> = {
     </>
   ),
   check: <path d="M20 6L9 17l-5-5" />,
-  edit: <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  edit: <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />,
+  bookmark: <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />,
+  'bookmark-filled': (
+    <path
+      d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+      fill="currentColor"
+      stroke="currentColor"
+    />
+  ),
+  film: (
+    <>
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <line x1="8" y1="4" x2="8" y2="20" />
+      <line x1="16" y1="4" x2="16" y2="20" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15.5 14" />
+    </>
+  ),
+  pause: (
+    <>
+      <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none" />
+      <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none" />
+    </>
+  ),
+  crop: (
+    <>
+      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+      <path d="M2 6h14a2 2 0 0 1 2 2v14" />
+    </>
+  ),
+  columns: (
+    <>
+      <rect x="3" y="4" width="7" height="16" rx="1" />
+      <rect x="14" y="4" width="7" height="16" rx="1" />
+    </>
+  ),
+  'check-square': (
+    <>
+      <path d="M9 11l3 3L20 6" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </>
+  ),
+  square: <rect x="3" y="3" width="18" height="18" rx="2" />,
+  move: (
+    <>
+      <polyline points="5 9 2 12 5 15" />
+      <polyline points="9 5 12 2 15 5" />
+      <polyline points="15 19 12 22 9 19" />
+      <polyline points="19 9 22 12 19 15" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <line x1="12" y1="2" x2="12" y2="22" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </>
+  )
 }
 
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }): ReactElement {

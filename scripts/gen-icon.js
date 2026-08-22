@@ -88,8 +88,20 @@ for (let y = 0; y < SIZE; y++) {
     let c = y > 196 && y < 214 && x > 88 && x < 168 ? BG : BG // 预留：底部装饰
     c = BG
     // 书脊底座（书页下方的深色梯形）
-    if (inQuad(x, y, [[52, 194], [122, 178], [134, 178], [128, 200]]) ||
-        inQuad(x, y, [[128, 200], [134, 178], [204, 194], [204, 194]])) {
+    if (
+      inQuad(x, y, [
+        [52, 194],
+        [122, 178],
+        [134, 178],
+        [128, 200]
+      ]) ||
+      inQuad(x, y, [
+        [128, 200],
+        [134, 178],
+        [204, 194],
+        [204, 194]
+      ])
+    ) {
       c = BG_DARK
     }
     if (inQuad(x, y, leftPage) || inQuad(x, y, rightPage)) c = WHITE
@@ -103,15 +115,17 @@ for (let y = 0; y < SIZE; y++) {
 // ---------- PNG 编码 ----------
 function crc32(buf) {
   let c
-  const table = crc32.table || (crc32.table = (() => {
-    const t = new Int32Array(256)
-    for (let n = 0; n < 256; n++) {
-      c = n
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
-      t[n] = c
-    }
-    return t
-  })())
+  const table =
+    crc32.table ||
+    (crc32.table = (() => {
+      const t = new Int32Array(256)
+      for (let n = 0; n < 256; n++) {
+        c = n
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+        t[n] = c
+      }
+      return t
+    })())
   c = 0 ^ -1
   for (let i = 0; i < buf.length; i++) c = (c >>> 8) ^ table[(c ^ buf[i]) & 0xff]
   return (c ^ -1) >>> 0

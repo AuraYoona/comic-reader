@@ -1,14 +1,26 @@
 import path from 'node:path'
 
-/** 支持的图片扩展名 */
-export const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
+/** 支持的图片扩展名（Chromium 能直接解码的格式） */
+export const IMAGE_EXTS = new Set([
+  '.jpg',
+  '.jpeg',
+  '.jfif',
+  '.png',
+  '.webp',
+  '.gif',
+  '.avif',
+  '.bmp'
+])
 
 const MIME_BY_EXT: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.jfif': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp',
-  '.gif': 'image/gif'
+  '.gif': 'image/gif',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp'
 }
 
 /** 是否为受支持的图片文件（按扩展名判断，忽略隐藏文件） */
