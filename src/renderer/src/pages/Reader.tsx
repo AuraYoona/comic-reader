@@ -7,7 +7,7 @@ import { ReaderBottomBar, ReaderTopBar } from '@/components/reader/ReaderBars'
 import { useAutoHide } from '@/hooks/useAutoHide'
 import { scrollBus } from '@/lib/scrollBus'
 import { useReader } from '@/store/reader'
-import { useSettings } from '@/store/settings'
+import { setAutoTurnSeconds, useSettings } from '@/store/settings'
 
 const BARS_HIDE_DELAY_MS = 2600
 
@@ -15,7 +15,7 @@ const BARS_HIDE_DELAY_MS = 2600
  * 阅读器全屏覆盖层。
  * 键盘：← → 翻页（尊重阅读方向）、空格下一页、Esc 退出、F 全屏、
  *      PgUp/PgDn/Home/End、+/-/0 缩放、1/2/3 切换模式、
- *      B 书签、T 缩略图条、A 自动翻页、O 双页偏移、C 自动裁边。
+ *      B 书签、T 缩略图条、A 自动翻页、[ / ] 自动翻页间隔、O 双页偏移、C 自动裁边。
  */
 export default function Reader(): ReactNode {
   const opening = useReader((s) => s.opening)
@@ -177,6 +177,14 @@ export default function Reader(): ReactNode {
             e.preventDefault()
             store.toggleAutoTurn()
           }
+          break
+        case '[':
+          e.preventDefault()
+          setAutoTurnSeconds(useSettings.getState().settings.autoTurnSeconds - 1)
+          break
+        case ']':
+          e.preventDefault()
+          setAutoTurnSeconds(useSettings.getState().settings.autoTurnSeconds + 1)
           break
         case 'o':
         case 'O':

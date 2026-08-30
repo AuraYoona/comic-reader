@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import { DEFAULT_SETTINGS, type AppSettings, type ThemeMode } from '@shared/types'
+import {
+  DEFAULT_SETTINGS,
+  clampAutoTurnSeconds,
+  type AppSettings,
+  type ThemeMode
+} from '@shared/types'
 
 interface SettingsState {
   settings: AppSettings
@@ -28,6 +33,13 @@ export const useSettings = create<SettingsState>()((set) => ({
 
   replace: (settings) => set({ settings })
 }))
+
+/** 阅读中调节自动翻页间隔：夹到合法区间，无变化时不写盘 */
+export function setAutoTurnSeconds(seconds: number): void {
+  const next = clampAutoTurnSeconds(seconds)
+  if (next === useSettings.getState().settings.autoTurnSeconds) return
+  void useSettings.getState().update({ autoTurnSeconds: next })
+}
 
 /** 把主题设置落到 DOM（data-theme 驱动 CSS 变量） */
 export function applyTheme(theme: ThemeMode): void {

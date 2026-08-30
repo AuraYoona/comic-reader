@@ -359,7 +359,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }): Rea
           <span className="settings-range-value">{Math.round(settings.brightness * 100)}%</span>
         </div>
       </Row>
-      <Row label="自动翻页间隔" hint="阅读时按 A 开始 / 停止自动翻页">
+      <Row label="自动翻页间隔" hint="阅读时按 A 开始 / 停止，[ 与 ] 或底栏滑块可随时调节间隔">
         <div className="settings-range">
           <input
             type="range"
