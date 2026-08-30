@@ -1,6 +1,6 @@
 {
   "name": "comic-reader",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A local comic reader for Windows built with Electron + React + TypeScript.",
   "author": "AuraYoona",
   "repository": "github:AuraYoona/comic-reader",

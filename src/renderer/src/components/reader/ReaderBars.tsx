@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { ReadingDirection, ReadingMode, ZoomMode } from '@shared/types'
+import {
+  AUTO_TURN_MAX,
+  AUTO_TURN_MIN,
+  type ReadingDirection,
+  type ReadingMode,
+  type ZoomMode
+} from '@shared/types'
 import DropdownMenu from '@/components/common/DropdownMenu'
 import { Icon } from '@/components/common/Icon'
 import Segmented from '@/components/common/Segmented'
 import ThumbStrip from '@/components/reader/ThumbStrip'
 import { useReader } from '@/store/reader'
-import { useSettings } from '@/store/settings'
+import { setAutoTurnSeconds, useSettings } from '@/store/settings'
 
 interface BarProps {
   visible: boolean
@@ -145,6 +151,65 @@ export function ReaderTopBar({
   )
 }
 
+/** 自动翻页开关 + 间隔调节（拖动时先本地预览，松手才落盘） */
+function AutoTurnControls(): ReactNode {
+  const autoTurn = useReader((s) => s.autoTurn)
+  const toggleAutoTurn = useReader((s) => s.toggleAutoTurn)
+  const saved = useSettings((s) => s.settings.autoTurnSeconds)
+  const [draft, setDraft] = useState<number | null>(null)
+  const seconds = draft ?? saved
+
+  const commit = (v: number): void => {
+    setDraft(null)
+    setAutoTurnSeconds(v)
+  }
+
+  return (
+    <div className="auto-turn-group">
+      <button
+        className={autoTurn ? 'btn btn-sm btn-ghost active' : 'btn btn-sm btn-ghost'}
+        onClick={toggleAutoTurn}
+        title={`自动翻页 (A)：每 ${seconds} 秒一次`}
+      >
+        <Icon name={autoTurn ? 'pause' : 'clock'} size={14} />
+        {autoTurn ? '停止' : '自动'}
+      </button>
+      <div className="auto-turn-interval" title="自动翻页间隔（[ 更快 / ] 更慢）">
+        <button
+          className="icon-btn icon-btn-sm"
+          disabled={seconds <= AUTO_TURN_MIN}
+          onClick={() => commit(seconds - 1)}
+          title="间隔 -1 秒（[）"
+        >
+          −
+        </button>
+        <input
+          className="reader-slider auto-turn-slider"
+          type="range"
+          min={AUTO_TURN_MIN}
+          max={AUTO_TURN_MAX}
+          step={1}
+          value={seconds}
+          aria-label="自动翻页间隔（秒）"
+          onChange={(e) => setDraft(Number(e.target.value))}
+          onPointerUp={() => commit(seconds)}
+          onBlur={() => commit(seconds)}
+          onKeyUp={() => commit(seconds)}
+        />
+        <span className="auto-turn-value">{seconds}s</span>
+        <button
+          className="icon-btn icon-btn-sm"
+          disabled={seconds >= AUTO_TURN_MAX}
+          onClick={() => commit(seconds + 1)}
+          title="间隔 +1 秒（]）"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
   const page = useReader((s) => s.page)
   const pageCount = useReader((s) => s.pageCount)
@@ -154,7 +219,6 @@ export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
   const direction = useReader((s) => s.direction)
   const pageOffset = useReader((s) => s.pageOffset)
   const autoCrop = useReader((s) => s.autoCrop)
-  const autoTurn = useReader((s) => s.autoTurn)
   const thumbStrip = useReader((s) => s.thumbStrip)
   const setPage = useReader((s) => s.setPage)
   const setMode = useReader((s) => s.setMode)
@@ -163,11 +227,9 @@ export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
   const setDirection = useReader((s) => s.setDirection)
   const togglePageOffset = useReader((s) => s.togglePageOffset)
   const toggleAutoCrop = useReader((s) => s.toggleAutoCrop)
-  const toggleAutoTurn = useReader((s) => s.toggleAutoTurn)
   const toggleThumbStrip = useReader((s) => s.toggleThumbStrip)
   const next = useReader((s) => s.next)
   const prev = useReader((s) => s.prev)
-  const autoTurnSeconds = useSettings((s) => s.settings.autoTurnSeconds)
 
   const rtl = direction === 'rtl'
 
@@ -281,14 +343,7 @@ export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
           缩略图
         </button>
 
-        <button
-          className={autoTurn ? 'btn btn-sm btn-ghost active' : 'btn btn-sm btn-ghost'}
-          onClick={toggleAutoTurn}
-          title={`自动翻页 (A)：每 ${autoTurnSeconds} 秒一次`}
-        >
-          <Icon name={autoTurn ? 'pause' : 'clock'} size={14} />
-          {autoTurn ? '停止' : '自动'}
-        </button>
+        <AutoTurnControls />
       </div>
     </div>
   )
