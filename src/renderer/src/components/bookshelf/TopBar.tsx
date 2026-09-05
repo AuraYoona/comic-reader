@@ -155,7 +155,7 @@ export default function TopBar({
           </button>
           <button onClick={() => runImport('archive')}>
             <Icon name="archive" size={15} />
-            导入压缩包（ZIP / CBZ / RAR / CBR）…
+            导入文件（ZIP / CBZ / RAR / CBR / PDF）…
           </button>
           <button onClick={() => runImport('batch')}>
             <Icon name="folder-open" size={15} />

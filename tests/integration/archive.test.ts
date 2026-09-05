@@ -2,10 +2,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildPdf } from '../helpers/pdf'
 import { buildZip } from '../helpers/zip'
 
 /**
- * 归档层的端到端测试：文件夹 / ZIP / RAR 三条路径共用同一套对外接口，
+ * 归档层的端到端测试：文件夹 / ZIP / RAR / PDF 四条路径共用同一套对外接口，
  * 这里用真实的临时文件跑通「扫描 → 自然排序 → 按条目取字节」的全流程。
  */
 
@@ -156,11 +157,70 @@ describe('RAR / CBR 来源', () => {
   }, 30_000)
 })
 
+describe('PDF 来源', () => {
+  it('pdfium.wasm 落在我们显式加载的位置上', () => {
+    const wasm = path.join(
+      process.cwd(),
+      'node_modules',
+      '@hyzyla',
+      'pdfium',
+      'dist',
+      'pdfium.wasm'
+    )
+    expect(fs.existsSync(wasm)).toBe(true)
+    expect(fs.statSync(wasm).size).toBeGreaterThan(10_000)
+  })
+
+  const writePdf = (name: string): string => {
+    const file = path.join(dir, name)
+    fs.writeFileSync(
+      file,
+      buildPdf([
+        { width: 200, height: 300, r: 0.8, g: 0.1, b: 0.1 },
+        { width: 200, height: 300, r: 0.1, g: 0.8, b: 0.1 }
+      ])
+    )
+    return file
+  }
+
+  it('按页列出虚拟 PNG 条目', async () => {
+    expect(await scanSource('archive', writePdf('a.pdf'))).toEqual(['0001.png', '0002.png'])
+  }, 30_000)
+
+  it('按条目渲成 PNG 字节，MIME 为 image/png', async () => {
+    const file = writePdf('a.pdf')
+    const { data, mime } = await readEntry('archive', file, '0001.png')
+    expect(mime).toBe('image/png')
+    expect(
+      data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    ).toBe(true)
+    expect(data.readUInt32BE(16)).toBe(400) // 200pt × scale 2
+    expect(data.readUInt32BE(20)).toBe(600)
+  }, 30_000)
+
+  it('句柄缓存命中后仍能正确读取，释放后可重新打开', async () => {
+    const file = writePdf('a.pdf')
+    await scanSource('archive', file)
+    const first = await readEntry('archive', file, '0002.png')
+    expect(first.mime).toBe('image/png')
+    releaseSource(file)
+    const again = await readEntry('archive', file, '0002.png')
+    expect(again.data.equals(first.data)).toBe(true)
+  }, 30_000)
+
+  it('非法 PDF 被翻译成可读错误，而不是抛出底层异常', async () => {
+    const file = path.join(dir, 'broken.pdf')
+    fs.writeFileSync(file, Buffer.from('%PDF-1.4 但其实是假的'))
+    await expect(scanSource('archive', file)).rejects.toThrow(SourceError)
+    await expect(scanSource('archive', file)).rejects.toThrow(/PDF/)
+  }, 30_000)
+})
+
 describe('格式分派', () => {
-  it('不认识的压缩包扩展名直接拒绝', async () => {
+  it('不认识的文件扩展名直接拒绝', async () => {
     const file = path.join(dir, 'a.7z')
     fs.writeFileSync(file, Buffer.from('x'))
-    await expect(scanSource('archive', file)).rejects.toThrow(/不支持的压缩包格式/)
+    await expect(scanSource('archive', file)).rejects.toThrow(/不支持的文件格式/)
   })
 
   it('把文件夹当压缩包（或反过来）会被识破', async () => {

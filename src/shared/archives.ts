@@ -1,5 +1,5 @@
-/** 受支持的压缩包扩展名（含点，小写）。主进程按它分派解压实现，渲染进程用它还原标题。 */
-export const ARCHIVE_EXTS: readonly string[] = ['.zip', '.cbz', '.rar', '.cbr']
+/** 受支持的文件来源扩展名（含点，小写）。主进程按它分派读取实现，渲染进程用它还原标题。 */
+export const ARCHIVE_EXTS: readonly string[] = ['.zip', '.cbz', '.rar', '.cbr', '.pdf']
 
 /** 取扩展名（含点，小写）；没有扩展名返回空串 */
 function extname(p: string): string {

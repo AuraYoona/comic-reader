@@ -86,7 +86,7 @@ function LibraryRootsSection(): ReactNode {
   return (
     <>
       <div className="settings-section">漫画库目录</div>
-      <Row label="启动时扫描库目录" hint="把根目录下新增的子文件夹 / 压缩包自动上架">
+      <Row label="启动时扫描库目录" hint="把根目录下新增的子文件夹 / 压缩包 / PDF 自动上架">
         <Toggle on={settings.autoScanRoots} onChange={(v) => void update({ autoScanRoots: v })} />
       </Row>
 

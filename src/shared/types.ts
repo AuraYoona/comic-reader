@@ -22,7 +22,7 @@ export type ExtensionId = 'categories' | 'bookmarks'
 /** 全部扩展功能 ID，供主进程做白名单校验 */
 export const EXTENSION_IDS: readonly ExtensionId[] = ['categories', 'bookmarks']
 
-/** 漫画来源类型：本地文件夹 / 压缩包（ZIP、CBZ、RAR、CBR） */
+/** 漫画来源类型：本地文件夹 / 文件（ZIP、CBZ、RAR、CBR、PDF） */
 export type SourceType = 'folder' | 'archive'
 
 /**

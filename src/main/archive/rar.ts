@@ -1,10 +1,11 @@
-import { promises as fsp, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { createExtractorFromData, type Extractor } from 'node-unrar-js'
 import { logger } from '../lib/logger'
-import { SourceError, ioError } from './errors'
+import { SourceError } from './errors'
 import { HandleCache } from './handleCache'
+import { readWholeFile } from './readFile'
 import type { ArchiveEntry, ArchiveReader } from './reader'
 
 /**
@@ -73,46 +74,15 @@ function rarError(err: unknown): SourceError {
   }
 }
 
-/** 一次性把整个文件读进一块 ArrayBuffer（先分配再填充，避免 Buffer→ArrayBuffer 的二次拷贝） */
-async function readWholeFile(file: string): Promise<ArrayBuffer> {
-  let size: number
-  try {
-    const st = await fsp.stat(file)
-    if (!st.isFile()) throw new SourceError('该路径不是文件')
-    size = st.size
-  } catch (err) {
-    throw err instanceof SourceError ? err : ioError(err, '无法访问 RAR 文件')
-  }
-  if (size > RAR_MAX_BYTES) {
-    throw new SourceError('这个 RAR 超过 1.5 GB，解压需要整体载入内存，暂不支持')
-  }
-
-  const buffer = new ArrayBuffer(size)
-  const view = Buffer.from(buffer)
-  const handle = await fsp.open(file, 'r').catch((err) => {
-    throw ioError(err, '无法打开 RAR 文件')
-  })
-  try {
-    let done = 0
-    while (done < size) {
-      const { bytesRead } = await handle.read(view, done, size - done, done)
-      if (bytesRead <= 0) break
-      done += bytesRead
-    }
-    if (done < size) throw new SourceError('读取 RAR 时文件提前结束，可能已损坏')
-  } catch (err) {
-    throw err instanceof SourceError ? err : ioError(err, '读取 RAR 失败')
-  } finally {
-    await handle.close().catch(() => {})
-  }
-  return buffer
-}
-
 const cache = new HandleCache<RarHandle>({
   max: RAR_MAX_OPEN,
   idleMs: RAR_IDLE_MS,
   open: async (file) => {
-    const data = await readWholeFile(file)
+    const data = await readWholeFile(
+      file,
+      RAR_MAX_BYTES,
+      '这个 RAR 超过 1.5 GB，解压需要整体载入内存，暂不支持'
+    )
     try {
       const extractor = await createExtractorFromData({ data, wasmBinary: getWasmBinary() })
       const entries = [...extractor.getFileList().fileHeaders].map<ArchiveEntry>((h) => ({

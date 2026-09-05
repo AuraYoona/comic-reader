@@ -24,6 +24,8 @@ function createWindow(): void {
     autoHideMenuBar: true,
     backgroundColor: '#151519', // 避免启动白闪
     title: '漫画阅读器',
+    // 打包后 Windows 用 exe 图标；开发时从源码目录取
+    ...(app.isPackaged ? {} : { icon: path.join(__dirname, '../../build/icon.png') }),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,

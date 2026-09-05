@@ -24,7 +24,7 @@ export interface ImportProgress {
   path: string
 }
 
-/** 导入入口：文件夹 / 压缩包 / 批量（选一个根目录，每个子文件夹或压缩包算一本） */
+/** 导入入口：文件夹 / 文件（压缩包或 PDF） / 批量（选一个根目录，每个子文件夹或文件算一本） */
 export type ImportKind = 'folder' | 'archive' | 'batch'
 
 /** 更新状态事件（主进程 → 渲染进程） */

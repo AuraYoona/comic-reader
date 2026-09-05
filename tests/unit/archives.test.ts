@@ -3,16 +3,18 @@ import { ARCHIVE_EXTS, isArchivePath, stripArchiveExt } from '../../src/shared/a
 import { coverNeedsThumbnail, isGeneratedCover } from '../../src/shared/covers'
 
 describe('isArchivePath', () => {
-  it('识别四种压缩包（大小写不敏感）', () => {
+  it('识别压缩包与 PDF（大小写不敏感）', () => {
     expect(isArchivePath('a.zip')).toBe(true)
     expect(isArchivePath('a.CBZ')).toBe(true)
     expect(isArchivePath('a.rar')).toBe(true)
     expect(isArchivePath('a.CbR')).toBe(true)
+    expect(isArchivePath('a.pdf')).toBe(true)
+    expect(isArchivePath('a.PDF')).toBe(true)
   })
 
   it('拒绝其它类型与无扩展名', () => {
     expect(isArchivePath('a.7z')).toBe(false)
-    expect(isArchivePath('a.pdf')).toBe(false)
+    expect(isArchivePath('a.epub')).toBe(false)
     expect(isArchivePath('folder')).toBe(false)
     expect(isArchivePath('.zip')).toBe(false) // 隐藏文件，不算扩展名
   })
@@ -20,10 +22,11 @@ describe('isArchivePath', () => {
   it('只看最后一段路径', () => {
     expect(isArchivePath('D:/a.zip/b')).toBe(false)
     expect(isArchivePath('D:/dir.rar/vol1.cbz')).toBe(true)
+    expect(isArchivePath('D:/dir/vol1.pdf')).toBe(true)
   })
 
-  it('四种扩展名都在清单里', () => {
-    expect([...ARCHIVE_EXTS].sort()).toEqual(['.cbr', '.cbz', '.rar', '.zip'])
+  it('五种扩展名都在清单里', () => {
+    expect([...ARCHIVE_EXTS].sort()).toEqual(['.cbr', '.cbz', '.pdf', '.rar', '.zip'])
   })
 })
 
@@ -31,6 +34,7 @@ describe('stripArchiveExt', () => {
   it('去掉压缩包扩展名', () => {
     expect(stripArchiveExt('孤独摇滚 v01.cbz')).toBe('孤独摇滚 v01')
     expect(stripArchiveExt('x.RAR')).toBe('x')
+    expect(stripArchiveExt('第01卷.PDF')).toBe('第01卷')
   })
 
   it('不是压缩包就原样返回', () => {

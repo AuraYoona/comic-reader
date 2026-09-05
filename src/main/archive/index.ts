@@ -5,6 +5,7 @@ import { isImagePath, isJunkEntry, mimeFor } from '../utils/images'
 import { naturalCompare } from '../utils/naturalSort'
 import { SourceError, ioError } from './errors'
 import { archiveFormat } from './formats'
+import { pdfReader } from './pdf'
 import { rarReader } from './rar'
 import type { ArchiveReader } from './reader'
 import { zipReader } from './zip'
@@ -18,14 +19,15 @@ export {
   stripArchiveExt
 } from './formats'
 
-const READERS: ArchiveReader[] = [zipReader, rarReader]
+const READERS: ArchiveReader[] = [zipReader, rarReader, pdfReader]
 
-/** 按扩展名挑选压缩包适配器 */
+/** 按扩展名挑选文件来源适配器 */
 function readerFor(sourcePath: string): ArchiveReader {
   const format = archiveFormat(sourcePath)
   if (format === 'zip') return zipReader
   if (format === 'rar') return rarReader
-  throw new SourceError('不支持的压缩包格式（支持 ZIP、CBZ、RAR、CBR）')
+  if (format === 'pdf') return pdfReader
+  throw new SourceError('不支持的文件格式（支持 ZIP、CBZ、RAR、CBR、PDF）')
 }
 
 /** 来源是否仍然可访问（书架“来源丢失”校验用） */
@@ -61,7 +63,7 @@ async function walkFolderImages(root: string, rel: string, out: string[]): Promi
   }
 }
 
-/** 扫描来源，返回自然排序后的页面条目列表（folder 为相对路径，archive 为压缩包条目名） */
+/** 扫描来源，返回自然排序后的页面条目列表（folder 为相对路径，archive 为文件内条目名） */
 export async function scanSource(sourceType: SourceType, sourcePath: string): Promise<string[]> {
   let st
   try {
@@ -72,7 +74,7 @@ export async function scanSource(sourceType: SourceType, sourcePath: string): Pr
       throw new SourceError(
         sourceType === 'folder'
           ? `文件夹不存在，可能已被移动或删除：${sourcePath}`
-          : `压缩包不存在，可能已被移动或删除：${sourcePath}`,
+          : `文件不存在，可能已被移动或删除：${sourcePath}`,
         sourcePath
       )
     }
@@ -125,7 +127,7 @@ export async function readEntry(
       return { data: await reader.read(sourcePath, entry), mime: mimeFor(entry) }
     } catch (retryErr) {
       if (retryErr instanceof SourceError) throw retryErr
-      throw new SourceError('读取压缩包内图片失败，文件可能已损坏')
+      throw new SourceError('读取文件内页面失败，文件可能已损坏')
     }
   }
 }

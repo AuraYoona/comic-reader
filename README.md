@@ -8,7 +8,7 @@
 ![Electron](https://img.shields.io/badge/Electron-31-47848f)
 ![React](https://img.shields.io/badge/React-18-61dafb)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
-![Tests](https://img.shields.io/badge/tests-vitest%20%C3%97%20122-6e9f18)
+![Tests](https://img.shields.io/badge/tests-vitest%20%C3%97%20129-6e9f18)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **[下载最新版本 →](https://github.com/AuraYoona/comic-reader/releases)**
@@ -21,8 +21,8 @@
 
 ### 📥 导入
 
-- 支持**本地文件夹**与 **ZIP / CBZ / RAR / CBR** 压缩包，可多选、可直接**拖拽进窗口**
-- **批量导入**：选择一个根目录，每个子文件夹 / 压缩包自动作为一本漫画
+- 支持**本地文件夹**、**ZIP / CBZ / RAR / CBR** 压缩包与 **PDF**，可多选、可直接**拖拽进窗口**
+- **批量导入**：选择一个根目录，每个子文件夹 / 压缩包 / PDF 自动作为一本漫画
 - **库目录记忆**：批量导入过的根目录会被记住，启动时自动扫描，新丢进去的漫画直接上架
 - 识别 `jpg` `jpeg` `jfif` `png` `webp` `gif` `avif` `bmp`，页码**自然排序**（`1, 2, 10` 而非 `1, 10, 2`）
 - 自动提取第一页生成封面缩略图；按路径去重；单项失败不影响其余项
@@ -120,8 +120,8 @@ logs/main.log       主进程日志（>2MB 自动轮转）
 | 翻页白屏             | 相邻页用 `img.decode()` **预解码**进 Chromium 图像缓存（LRU 32 张，淘汰即中断请求）                |
 | 长篇滚动爆内存       | IntersectionObserver 只挂载视口 ±2 屏，远处卸载并保留占位高度                                      |
 | 书架万卡渲染         | 自研虚拟网格：封面固定 3:4 + 标题固定两行 → 行高精确可算，只渲染可视行                             |
-| 压缩包反复开销       | 按格式分派的适配器 + 通用句柄 LRU（ZIP 4 个 / RAR 1 个，空闲自动关闭，并发打开合并成一次）         |
-| RAR 支持要装原生模块 | 用纯 WASM 的 `node-unrar-js`，打包无需编译；wasm 显式读入内存交给库，绕开 asar 定位问题            |
+| 压缩包反复开销       | 按格式分派的适配器 + 通用句柄 LRU（ZIP 4 个 / RAR、PDF 各 1 个，空闲自动关闭，并发打开合并成一次） |
+| RAR / PDF 要装原生模块 | 用纯 WASM（`node-unrar-js` / `@hyzyla/pdfium`），打包无需编译；wasm 显式读入内存交给库，绕开 asar 定位问题 |
 | 翻页把整库写爆       | 进度更新走 5 秒长防抖并与结构性改动分档（最早截止时间生效），退出前 `flushSync` 兜底，进度不会丢   |
 | 封面是几 MB 的原图   | nativeImage 解不了 WebP/AVIF 时先原样落盘，再由渲染进程用 canvas 压成 480px JPEG 回传替换          |
 | 跨页图被压成一半     | 图片加载后按宽高比判定，跨页图独占整屏并让后续配对顺延                                             |
@@ -135,7 +135,7 @@ logs/main.log       主进程日志（>2MB 自动轮转）
 ## 🗺️ Roadmap
 
 - [x] RAR / CBR 支持
-- [ ] PDF 支持
+- [x] PDF 支持
 - [x] 双页模式封面单独显示（首页对齐）
 - [x] 跨页大图铺满整屏
 - [x] 分组整理（「自定义分类」扩展功能）
