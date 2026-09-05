@@ -1,6 +1,6 @@
 /** IPC 通道名统一定义，主进程与预加载脚本共用，避免字符串散落各处 */
 export const IPC = {
-  /** invoke: 弹出系统对话框选择文件夹/压缩包并导入 */
+  /** invoke: 弹出系统对话框选择文件夹 / 压缩包 / PDF 并导入 */
   ImportSelect: 'import:select',
   /** invoke: 导入指定路径（拖拽用） */
   ImportPaths: 'import:paths',

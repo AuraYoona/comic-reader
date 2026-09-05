@@ -160,7 +160,7 @@ export default function Bookshelf(): ReactNode {
     return () => window.removeEventListener('keydown', onKey)
   }, [visibleIds])
 
-  // 拖拽导入：文件夹 / 压缩包（阅读器打开时忽略）
+  // 拖拽导入：文件夹 / 压缩包 / PDF（阅读器打开时忽略）
   useEffect(() => {
     const readerActive = (): boolean => useReader.getState().active
     const onDragEnter = (e: DragEvent): void => {

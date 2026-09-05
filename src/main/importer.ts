@@ -67,7 +67,7 @@ async function importOne(rawPath: string, seenInBatch: Set<string>): Promise<Imp
     let sourceType: SourceType
     if (st.isDirectory()) sourceType = 'folder'
     else if (st.isFile() && isArchivePath(sourcePath)) sourceType = 'archive'
-    else return failed(sourcePath, '不支持的文件类型（支持文件夹与 ZIP / CBZ / RAR / CBR）')
+    else return failed(sourcePath, '不支持的文件类型（支持文件夹、ZIP / CBZ / RAR / CBR 与 PDF）')
 
     const norm = normalizeForCompare(sourcePath)
     if (seenInBatch.has(norm)) return { path: sourcePath, status: 'skipped', reason: '重复选择' }
@@ -82,7 +82,7 @@ async function importOne(rawPath: string, seenInBatch: Set<string>): Promise<Imp
     if (pages.length === 0) {
       return failed(
         sourcePath,
-        sourceType === 'folder' ? '文件夹中没有找到图片' : '压缩包中没有找到图片'
+        sourceType === 'folder' ? '文件夹中没有找到图片' : '文件中没有找到可阅读的页面'
       )
     }
 
@@ -138,7 +138,7 @@ export async function importPaths(
 }
 
 /**
- * 把“漫画库根目录”展开成待导入项：每个子文件夹或压缩包算一本。
+ * 把“漫画库根目录”展开成待导入项：每个子文件夹、压缩包或 PDF 算一本。
  * 返回 null 表示根目录本身读不了。
  */
 export async function expandBatchRoot(root: string): Promise<string[] | null> {

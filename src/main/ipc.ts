@@ -145,7 +145,7 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
 
     if (kind === 'batch') {
       const picked = await dialog.showOpenDialog(win, {
-        title: '选择漫画库根目录（每个子文件夹或压缩包作为一本漫画）',
+        title: '选择漫画库根目录（每个子文件夹、压缩包或 PDF 作为一本漫画）',
         properties: ['openDirectory']
       })
       const root = picked.filePaths[0]
@@ -155,7 +155,7 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
         return [{ path: root, status: 'failed', reason: '无法读取该文件夹，请检查权限' }]
       }
       if (targets.length === 0) {
-        return [{ path: root, status: 'failed', reason: '目录下没有子文件夹或受支持的压缩包' }]
+        return [{ path: root, status: 'failed', reason: '目录下没有子文件夹或受支持的漫画文件' }]
       }
       // 记住这个根目录，之后可以增量扫描出新加进来的漫画
       db.addLibraryRoot(root)
@@ -169,9 +169,12 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
             properties: ['openDirectory', 'multiSelections']
           }
         : {
-            title: '选择漫画压缩包（可多选）',
+            title: '选择漫画文件（可多选）',
             filters: [
-              { name: '漫画压缩包 (ZIP / CBZ / RAR / CBR)', extensions: [...ARCHIVE_FILTER_EXTS] }
+              {
+                name: '漫画文件 (ZIP / CBZ / RAR / CBR / PDF)',
+                extensions: [...ARCHIVE_FILTER_EXTS]
+              }
             ],
             properties: ['openFile', 'multiSelections']
           }

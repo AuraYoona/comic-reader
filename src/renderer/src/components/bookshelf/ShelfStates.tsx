@@ -13,7 +13,9 @@ export function EmptyShelf(): ReactNode {
         <Icon name="book" size={44} />
       </div>
       <h2>书架还是空的</h2>
-      <p>导入本地漫画文件夹或 ZIP / CBZ / RAR / CBR 压缩包开始阅读，也可以直接把它们拖进窗口。</p>
+      <p>
+        导入本地漫画文件夹、ZIP / CBZ / RAR / CBR 压缩包或 PDF 开始阅读，也可以直接把它们拖进窗口。
+      </p>
       <div className="state-actions">
         <button className="btn btn-primary" onClick={() => void importFrom('folder')}>
           <Icon name="folder" size={15} />
@@ -21,7 +23,7 @@ export function EmptyShelf(): ReactNode {
         </button>
         <button className="btn" onClick={() => void importFrom('archive')}>
           <Icon name="archive" size={15} />
-          导入压缩包
+          导入文件
         </button>
       </div>
     </div>
