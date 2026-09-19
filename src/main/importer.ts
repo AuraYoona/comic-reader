@@ -102,9 +102,10 @@ async function importOne(rawPath: string, seenInBatch: Set<string>): Promise<Imp
       lastReadAt: null,
       lastReadPage: 0,
       reader: {},
-      // 新导入的漫画不属于任何分类，也没有书签
+      // 新导入的漫画不属于任何分类，也没有书签和类型标签
       categoryIds: [],
-      bookmarks: []
+      bookmarks: [],
+      style: null
     }
     db.upsertComic(comic)
     return { path: sourcePath, status: 'imported', comic }

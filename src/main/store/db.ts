@@ -4,17 +4,21 @@ import path from 'node:path'
 import { app } from 'electron'
 import {
   CATEGORY_COLORS,
+  COMIC_STYLE_IDS,
   DEFAULT_SETTINGS,
   EXTENSION_IDS,
   LIBRARY_ROOTS_MAX,
   TITLE_MAX,
+  clampAutoScrollSpeed,
   clampAutoTurnSeconds,
   clampBrightness,
+  comicStyleInfo,
   type AppSettings,
   type Category,
   type CategoryPatch,
   type Comic,
-  type ComicReaderPrefs
+  type ComicReaderPrefs,
+  type ComicStyle
 } from '@shared/types'
 import { logger } from '../lib/logger'
 import { CURRENT_SCHEMA_VERSION, migrateLibraryData } from './migrations'
@@ -97,6 +101,8 @@ function sanitizeSettings(raw: unknown): AppSettings {
   if (typeof r.mouseSideButtons === 'boolean') s.mouseSideButtons = r.mouseSideButtons
   if (typeof r.autoCrop === 'boolean') s.autoCrop = r.autoCrop
   if (typeof r.autoScanRoots === 'boolean') s.autoScanRoots = r.autoScanRoots
+  if (typeof r.autoScrollSpeed === 'number')
+    s.autoScrollSpeed = clampAutoScrollSpeed(r.autoScrollSpeed)
   if (Array.isArray(r.libraryRoots)) {
     const seen = new Set<string>()
     const roots: string[] = []
@@ -120,6 +126,11 @@ function sanitizeSettings(raw: unknown): AppSettings {
   return s
 }
 
+/** 类型标签只认白名单，其余（含旧版写入的未知值）一律视为未打标签 */
+export function sanitizeStyle(raw: unknown): ComicStyle | null {
+  return COMIC_STYLE_IDS.includes(raw as ComicStyle) ? (raw as ComicStyle) : null
+}
+
 function sanitizeComics(raw: unknown): Comic[] {
   if (!Array.isArray(raw)) return []
   return raw
@@ -133,11 +144,12 @@ function sanitizeComics(raw: unknown): Comic[] {
     )
     .map((c) => ({
       ...c,
-      // categoryIds / bookmarks 必须存在且元素合法，其余字段原样透传
+      // categoryIds / bookmarks / style 必须存在且合法，其余字段原样透传
       categoryIds: Array.isArray(c.categoryIds)
         ? c.categoryIds.filter((id) => typeof id === 'string')
         : [],
-      bookmarks: sanitizeBookmarks(c.bookmarks)
+      bookmarks: sanitizeBookmarks(c.bookmarks),
+      style: sanitizeStyle(c.style)
     }))
 }
 
@@ -366,6 +378,27 @@ class Database {
       : [...comic.bookmarks, target].sort((a, b) => a - b)
     this.saveSoon()
     return comic
+  }
+
+  /**
+   * 批量打类型标签，返回真正改动过的记录。
+   * 打标签时把该类型的阅读预设一次性写进每本的阅读偏好——否则之前单独调过的
+   * 模式 / 方向会盖住预设，标签形同虚设；之后在阅读器里再改仍然按本记住。
+   * 传 null 只摘掉标签，已写入的偏好保持原样。
+   */
+  setComicsStyle(ids: string[], style: ComicStyle | null): Comic[] {
+    const target = new Set(ids)
+    const preset = comicStyleInfo(style)?.preset
+    const changed: Comic[] = []
+    for (const comic of this.data.comics) {
+      if (!target.has(comic.id)) continue
+      if (comic.style === style && !preset) continue
+      comic.style = style
+      if (preset) comic.reader = { ...comic.reader, ...preset }
+      changed.push(comic)
+    }
+    if (changed.length > 0) this.saveSoon()
+    return changed
   }
 
   // ---------- 设置 ----------

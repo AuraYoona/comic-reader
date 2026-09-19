@@ -43,6 +43,58 @@ export interface ComicReaderPrefs {
   pageOffset?: PageOffset
   /** 自动裁掉扫描留下的白边（v4 新增），缺省时取全局 autoCrop */
   autoCrop?: boolean
+  /** 滚动模式下的自动翻页改为匀速向下平滑滚动（v5 新增，条漫专用），缺省为按屏翻 */
+  autoScroll?: boolean
+}
+
+/**
+ * 类型标签（v5 新增）：日漫 / 韩漫 / 国漫 / 美漫。
+ * 每种类型自带一套阅读预设，打上标签时会一次性写进该本的阅读偏好；
+ * 与「自定义分类」互不相干——分类用来整理书架，标签决定怎么读。
+ */
+export type ComicStyle = 'manga' | 'manhwa' | 'manhua' | 'western'
+
+export interface ComicStyleInfo {
+  id: ComicStyle
+  label: string
+  /** 一句话说明这种类型的阅读习惯 */
+  hint: string
+  /** 打标签时写入阅读偏好的字段 */
+  preset: Pick<ComicReaderPrefs, 'mode' | 'direction' | 'pageOffset' | 'autoScroll'>
+}
+
+export const COMIC_STYLES: readonly ComicStyleInfo[] = [
+  {
+    id: 'manga',
+    label: '日漫',
+    hint: '从右到左翻页，封面单独占屏',
+    preset: { mode: 'single', direction: 'rtl', pageOffset: 1, autoScroll: false }
+  },
+  {
+    id: 'manhwa',
+    label: '韩漫',
+    hint: '条漫：连续滚动，自动翻页改为平滑向下滚动',
+    preset: { mode: 'scroll', direction: 'ltr', pageOffset: 1, autoScroll: true }
+  },
+  {
+    id: 'manhua',
+    label: '国漫',
+    hint: '条漫：连续滚动，自动翻页改为平滑向下滚动',
+    preset: { mode: 'scroll', direction: 'ltr', pageOffset: 1, autoScroll: true }
+  },
+  {
+    id: 'western',
+    label: '美漫',
+    hint: '从左到右翻页，封面单独占屏',
+    preset: { mode: 'single', direction: 'ltr', pageOffset: 1, autoScroll: false }
+  }
+]
+
+/** 全部类型标签 ID，供主进程做白名单校验 */
+export const COMIC_STYLE_IDS: readonly ComicStyle[] = COMIC_STYLES.map((s) => s.id)
+
+export function comicStyleInfo(id: ComicStyle | null | undefined): ComicStyleInfo | null {
+  return id ? (COMIC_STYLES.find((s) => s.id === id) ?? null) : null
 }
 
 /** 书架中的一本漫画 */
@@ -64,6 +116,8 @@ export interface Comic {
   categoryIds: string[]
   /** 书签页码，0 起始、升序去重（v4 新增，属于「书签」扩展功能） */
   bookmarks: number[]
+  /** 类型标签（v5 新增），null = 未打标签 */
+  style: ComicStyle | null
 }
 
 /** 自定义分类（v3 新增，属于「自定义分类」扩展功能） */
@@ -142,6 +196,10 @@ export interface AppSettings {
   libraryRoots: string[]
   /** 启动时扫描库根目录，把新增的漫画自动上架 */
   autoScanRoots: boolean
+
+  // ---- v5 新增 ----
+  /** 条漫平滑自动滚动的速度（像素 / 秒） */
+  autoScrollSpeed: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -161,7 +219,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mouseSideButtons: true,
   autoCrop: false,
   libraryRoots: [],
-  autoScanRoots: true
+  autoScanRoots: true,
+  autoScrollSpeed: 80
 }
 
 /** 单个导入项的结果 */
@@ -275,4 +334,15 @@ export const AUTO_TURN_MAX = 60
 export function clampAutoTurnSeconds(v: number): number {
   if (!Number.isFinite(v)) return DEFAULT_SETTINGS.autoTurnSeconds
   return Math.min(AUTO_TURN_MAX, Math.max(AUTO_TURN_MIN, Math.round(v)))
+}
+
+export const AUTO_SCROLL_MIN = 10
+export const AUTO_SCROLL_MAX = 400
+export const AUTO_SCROLL_STEP = 10
+
+/** 平滑自动滚动速度（像素 / 秒），按步进取整 */
+export function clampAutoScrollSpeed(v: number): number {
+  if (!Number.isFinite(v)) return DEFAULT_SETTINGS.autoScrollSpeed
+  const stepped = Math.round(v / AUTO_SCROLL_STEP) * AUTO_SCROLL_STEP
+  return Math.min(AUTO_SCROLL_MAX, Math.max(AUTO_SCROLL_MIN, stepped))
 }

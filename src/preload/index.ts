@@ -47,6 +47,8 @@ const api: RendererApi = {
 
   toggleBookmark: (id, page) => ipcRenderer.invoke(IPC.ComicToggleBookmark, id, page),
 
+  setComicStyle: (ids, style) => ipcRenderer.invoke(IPC.ComicSetStyle, ids, style),
+
   // Uint8Array 走结构化克隆，不经过 JSON，几十 KB 的封面开销可以忽略
   saveCoverThumbnail: (id, jpeg) => ipcRenderer.invoke(IPC.CoverSaveThumb, id, jpeg),
 

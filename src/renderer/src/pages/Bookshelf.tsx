@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { CardSize, Comic } from '@shared/types'
+import { comicStyleInfo, type CardSize, type Comic } from '@shared/types'
 import CategoryAssignModal from '@/components/bookshelf/CategoryAssignModal'
 import CategoryManagerModal from '@/components/bookshelf/CategoryManagerModal'
 import ComicCard from '@/components/bookshelf/ComicCard'
@@ -16,7 +16,7 @@ import {
 } from '@/components/bookshelf/ShelfStates'
 import Modal from '@/components/common/Modal'
 import { useVirtualGrid } from '@/hooks/useVirtualGrid'
-import { UNCATEGORIZED_ID, useLibrary } from '@/store/library'
+import { UNCATEGORIZED_ID, UNSTYLED_ID, useLibrary } from '@/store/library'
 import { useReader } from '@/store/reader'
 import { useSettings } from '@/store/settings'
 
@@ -36,6 +36,7 @@ export default function Bookshelf(): ReactNode {
   const missingIds = useLibrary((s) => s.missingIds)
   const categories = useLibrary((s) => s.categories)
   const activeCategoryId = useLibrary((s) => s.activeCategoryId)
+  const activeStyle = useLibrary((s) => s.activeStyle)
   const selectedIds = useLibrary((s) => s.selectedIds)
   const remove = useLibrary((s) => s.remove)
   const removeMany = useLibrary((s) => s.removeMany)
@@ -63,6 +64,11 @@ export default function Bookshelf(): ReactNode {
       } else if (cat !== null && !c.categoryIds.includes(cat)) {
         return false
       }
+      if (activeStyle === UNSTYLED_ID) {
+        if (c.style !== null) return false
+      } else if (activeStyle !== null && c.style !== activeStyle) {
+        return false
+      }
       return q === '' || c.title.toLowerCase().includes(q)
     })
     switch (sortKey) {
@@ -77,7 +83,7 @@ export default function Bookshelf(): ReactNode {
           (a, b) => (b.lastReadAt ?? 0) - (a.lastReadAt ?? 0) || b.addedAt - a.addedAt
         )
     }
-  }, [comics, query, sortKey, categoriesEnabled, activeCategoryId])
+  }, [comics, query, sortKey, categoriesEnabled, activeCategoryId, activeStyle])
 
   const visibleIds = useMemo(() => visible.map((c) => c.id), [visible])
   // Shift 连选要按「看得见的顺序」算范围，而 store 里的 comics 是未排序的原始顺序
@@ -114,10 +120,16 @@ export default function Bookshelf(): ReactNode {
     return categories.find((c) => c.id === activeCategoryId)?.name ?? null
   }, [categoriesEnabled, activeCategoryId, categories])
 
-  // 切换分类筛选后回到顶部
+  const activeStyleLabel = useMemo(() => {
+    if (activeStyle === null) return null
+    if (activeStyle === UNSTYLED_ID) return '未标记'
+    return comicStyleInfo(activeStyle)?.label ?? null
+  }, [activeStyle])
+
+  // 切换分类 / 类型筛选后回到顶部
   useEffect(() => {
     if (containerRef.current) containerRef.current.scrollTop = 0
-  }, [activeCategoryId, categoriesEnabled, containerRef])
+  }, [activeCategoryId, activeStyle, categoriesEnabled, containerRef])
 
   // 来源存在性校验：加载后 + 窗口重新聚焦时（节流）
   useEffect(() => {
@@ -222,6 +234,7 @@ export default function Bookshelf(): ReactNode {
             query={query.trim()}
             categoryLabel={activeCategoryLabel}
             uncategorized={categoriesEnabled && activeCategoryId === UNCATEGORIZED_ID}
+            styleLabel={activeStyleLabel}
           />
         ) : (
           <div className="vgrid" style={{ height: totalHeight }}>

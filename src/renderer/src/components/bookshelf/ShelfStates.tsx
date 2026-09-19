@@ -34,13 +34,29 @@ export function EmptyShelf(): ReactNode {
 export function NoResults({
   query,
   categoryLabel,
-  uncategorized = false
+  uncategorized = false,
+  styleLabel = null
 }: {
   query: string
   categoryLabel?: string | null
   /** 当前筛选是否为「未分类」哨兵（用户可以创建同名真实分类，不能靠名称区分） */
   uncategorized?: boolean
+  /** 类型标签筛选的文案（「未标记」或日漫 / 韩漫……） */
+  styleLabel?: string | null
 }): ReactNode {
+  if (query === '' && !uncategorized && !categoryLabel && styleLabel) {
+    return (
+      <div className="state-pane">
+        <div className="state-icon">
+          <Icon name="style" size={40} />
+        </div>
+        <h2>
+          {styleLabel === '未标记' ? '每本漫画都已标记类型' : `还没有标为「${styleLabel}」的漫画`}
+        </h2>
+        <p>在卡片菜单的「类型标签」里选择，阅读方式会跟着类型自动设置。</p>
+      </div>
+    )
+  }
   // 没有搜索词时说明是分类筛选出的空结果，换成分类文案
   if (query === '' && (uncategorized || categoryLabel)) {
     return (

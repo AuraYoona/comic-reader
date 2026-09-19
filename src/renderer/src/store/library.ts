@@ -1,8 +1,10 @@
 import { create } from 'zustand'
+import { comicStyleInfo } from '@shared/types'
 import type {
   Category,
   CategoryPatch,
   Comic,
+  ComicStyle,
   ImportResult,
   RestoreMode,
   SortKey
@@ -14,6 +16,9 @@ import { useUi } from './ui'
 
 /** 「未分类」筛选的哨兵 id；真实分类 id 是 UUID，不会撞上 */
 export const UNCATEGORIZED_ID = '@uncategorized'
+/** 「未打标签」筛选的哨兵值；类型标签 id 都是英文小写单词，不会撞上 */
+export const UNSTYLED_ID = '@unstyled'
+export type StyleFilter = ComicStyle | typeof UNSTYLED_ID | null
 
 interface BusyState {
   active: boolean
@@ -40,6 +45,8 @@ interface LibraryState {
   categories: Category[]
   /** 分类筛选：null = 全部，UNCATEGORIZED_ID = 未分类；与 query 一样只存在于内存 */
   activeCategoryId: string | null
+  /** 类型标签筛选：null = 全部，UNSTYLED_ID = 未打标签；只存在于内存 */
+  activeStyle: StyleFilter
   /** 多选中的漫画 id；非空即进入选择模式 */
   selectedIds: Set<string>
   /** Shift 连选的锚点 */
@@ -73,6 +80,7 @@ interface LibraryState {
   /** 用主进程返回的最新记录替换本地条目（进度更新后书架立即反映） */
   applyComicPatch: (comic: Comic) => void
   setActiveCategory: (id: string | null) => void
+  setActiveStyle: (style: StyleFilter) => void
   /** 创建成功返回新分类，失败（重名等）提示错误并返回 null */
   createCategory: (name: string, color?: string) => Promise<Category | null>
   /** 修改成功返回 true；失败（重名等）提示错误并返回 false，调用方可保留编辑态 */
@@ -83,6 +91,8 @@ interface LibraryState {
   toggleComicCategory: (comicId: string, categoryId: string) => Promise<void>
   /** 批量设置分类：add=true 全部加入，false 全部移出 */
   setCategoryMany: (ids: string[], categoryId: string, add: boolean) => Promise<void>
+  /** 给一本或多本漫画打 / 摘类型标签（null = 摘掉），阅读预设由主进程一并写入 */
+  setStyle: (ids: string[], style: ComicStyle | null) => Promise<void>
 
   toggleSelect: (id: string) => void
   selectRange: (orderedIds: string[], id: string) => void
@@ -146,6 +156,7 @@ export const useLibrary = create<LibraryState>()((set, get) => {
     missingIds: new Set<string>(),
     categories: [],
     activeCategoryId: null,
+    activeStyle: null,
     selectedIds: new Set<string>(),
     anchorId: null,
 
@@ -404,6 +415,7 @@ export const useLibrary = create<LibraryState>()((set, get) => {
       })),
 
     setActiveCategory: (activeCategoryId) => set({ activeCategoryId }),
+    setActiveStyle: (activeStyle) => set({ activeStyle }),
 
     createCategory: async (name, color) => {
       try {
@@ -482,6 +494,25 @@ export const useLibrary = create<LibraryState>()((set, get) => {
           )
       } catch {
         useUi.getState().toast('批量设置分类失败', 'error')
+      }
+    },
+
+    setStyle: async (ids, style) => {
+      if (ids.length === 0) return
+      try {
+        const changed = await window.api.setComicStyle(ids, style)
+        for (const comic of changed) get().applyComicPatch(comic)
+        const label = comicStyleInfo(style)?.label
+        useUi
+          .getState()
+          .toast(
+            label
+              ? `已把 ${changed.length} 本标为「${label}」，阅读方式已按其习惯设置`
+              : `已摘掉 ${changed.length} 本的类型标签`,
+            'success'
+          )
+      } catch {
+        useUi.getState().toast('设置类型标签失败', 'error')
       }
     },
 

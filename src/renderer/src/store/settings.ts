@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
   DEFAULT_SETTINGS,
+  clampAutoScrollSpeed,
   clampAutoTurnSeconds,
   type AppSettings,
   type ThemeMode
@@ -39,6 +40,13 @@ export function setAutoTurnSeconds(seconds: number): void {
   const next = clampAutoTurnSeconds(seconds)
   if (next === useSettings.getState().settings.autoTurnSeconds) return
   void useSettings.getState().update({ autoTurnSeconds: next })
+}
+
+/** 阅读中调节条漫平滑滚动速度：夹到合法区间，无变化时不写盘 */
+export function setAutoScrollSpeed(speed: number): void {
+  const next = clampAutoScrollSpeed(speed)
+  if (next === useSettings.getState().settings.autoScrollSpeed) return
+  void useSettings.getState().update({ autoScrollSpeed: next })
 }
 
 /** 把主题设置落到 DOM（data-theme 驱动 CSS 变量） */

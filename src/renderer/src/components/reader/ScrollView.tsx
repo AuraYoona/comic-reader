@@ -123,6 +123,23 @@ export default function ScrollView({ onToggleBars }: { onToggleBars: () => void 
     scrollBus.scrollByViewport = (fraction) => {
       el.scrollBy({ top: el.clientHeight * fraction, behavior: 'auto' })
     }
+    // 平滑自动滚动按浮点位置推进、绝对赋值 scrollTop。
+    // 不能用「scrollTop += 整数」逐步累加：高 DPI 下浏览器会把 scrollTop 对齐到设备像素，
+    // 1.5 倍缩放时每走 1px 实际只落到 0.67px，速度悄悄打了折。
+    let autoPos: number | null = null
+    scrollBus.scrollByPixels = (dy) => {
+      const max = el.scrollHeight - el.clientHeight
+      const cur = el.scrollTop
+      // 首帧、或用户中途手动滚过：从当前位置重新同步（像素对齐的误差不到 1px，不会误判）
+      if (autoPos === null || Math.abs(cur - autoPos) > 2) autoPos = cur
+      if (cur >= max - 1) {
+        autoPos = null
+        return false
+      }
+      autoPos = Math.min(max, autoPos + dy)
+      el.scrollTop = autoPos
+      return true
+    }
     const onWheel = (e: WheelEvent): void => {
       if (!e.ctrlKey) return
       e.preventDefault()
@@ -133,6 +150,7 @@ export default function ScrollView({ onToggleBars }: { onToggleBars: () => void 
     return () => {
       el.removeEventListener('wheel', onWheel)
       scrollBus.scrollByViewport = null
+      scrollBus.scrollByPixels = null
     }
   }, [])
 

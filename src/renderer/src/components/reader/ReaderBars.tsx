@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
+  AUTO_SCROLL_MAX,
+  AUTO_SCROLL_MIN,
+  AUTO_SCROLL_STEP,
   AUTO_TURN_MAX,
   AUTO_TURN_MIN,
+  comicStyleInfo,
   type ReadingDirection,
   type ReadingMode,
   type ZoomMode
@@ -11,7 +15,7 @@ import { Icon } from '@/components/common/Icon'
 import Segmented from '@/components/common/Segmented'
 import ThumbStrip from '@/components/reader/ThumbStrip'
 import { useReader } from '@/store/reader'
-import { setAutoTurnSeconds, useSettings } from '@/store/settings'
+import { setAutoScrollSpeed, setAutoTurnSeconds, useSettings } from '@/store/settings'
 
 interface BarProps {
   visible: boolean
@@ -125,6 +129,7 @@ export function ReaderTopBar({
   const comic = useReader((s) => s.comic)
   const close = useReader((s) => s.close)
   const bookmarksEnabled = useSettings((s) => s.settings.extensions.bookmarks)
+  const style = comicStyleInfo(comic?.style)
 
   return (
     <div
@@ -136,6 +141,11 @@ export function ReaderTopBar({
         <Icon name="arrow-left" size={18} />
       </button>
       <div className="reader-title" title={comic?.sourcePath}>
+        {style && (
+          <span className="style-badge" title={style.hint}>
+            {style.label}
+          </span>
+        )}
         {comic?.title ?? ''}
       </div>
       <PageJump />
@@ -210,6 +220,65 @@ function AutoTurnControls(): ReactNode {
   )
 }
 
+/** 条漫的平滑自动滚动：开关 + 速度调节（像素 / 秒），交互与 AutoTurnControls 保持一致 */
+function AutoScrollControls(): ReactNode {
+  const autoTurn = useReader((s) => s.autoTurn)
+  const toggleAutoTurn = useReader((s) => s.toggleAutoTurn)
+  const saved = useSettings((s) => s.settings.autoScrollSpeed)
+  const [draft, setDraft] = useState<number | null>(null)
+  const speed = draft ?? saved
+
+  const commit = (v: number): void => {
+    setDraft(null)
+    setAutoScrollSpeed(v)
+  }
+
+  return (
+    <div className="auto-turn-group">
+      <button
+        className={autoTurn ? 'btn btn-sm btn-ghost active' : 'btn btn-sm btn-ghost'}
+        onClick={toggleAutoTurn}
+        title={`自动滚动 (A)：每秒 ${speed} 像素`}
+      >
+        <Icon name={autoTurn ? 'pause' : 'clock'} size={14} />
+        {autoTurn ? '停止' : '自动'}
+      </button>
+      <div className="auto-turn-interval" title="滚动速度（[ 更慢 / ] 更快）">
+        <button
+          className="icon-btn icon-btn-sm"
+          disabled={speed <= AUTO_SCROLL_MIN}
+          onClick={() => commit(speed - AUTO_SCROLL_STEP)}
+          title={`速度 -${AUTO_SCROLL_STEP}（[）`}
+        >
+          −
+        </button>
+        <input
+          className="reader-slider auto-turn-slider"
+          type="range"
+          min={AUTO_SCROLL_MIN}
+          max={AUTO_SCROLL_MAX}
+          step={AUTO_SCROLL_STEP}
+          value={speed}
+          aria-label="自动滚动速度（像素 / 秒）"
+          onChange={(e) => setDraft(Number(e.target.value))}
+          onPointerUp={() => commit(speed)}
+          onBlur={() => commit(speed)}
+          onKeyUp={() => commit(speed)}
+        />
+        <span className="auto-turn-value">{speed}px/s</span>
+        <button
+          className="icon-btn icon-btn-sm"
+          disabled={speed >= AUTO_SCROLL_MAX}
+          onClick={() => commit(speed + AUTO_SCROLL_STEP)}
+          title={`速度 +${AUTO_SCROLL_STEP}（]）`}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
   const page = useReader((s) => s.page)
   const pageCount = useReader((s) => s.pageCount)
@@ -219,6 +288,7 @@ export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
   const direction = useReader((s) => s.direction)
   const pageOffset = useReader((s) => s.pageOffset)
   const autoCrop = useReader((s) => s.autoCrop)
+  const autoScroll = useReader((s) => s.autoScroll)
   const thumbStrip = useReader((s) => s.thumbStrip)
   const setPage = useReader((s) => s.setPage)
   const setMode = useReader((s) => s.setMode)
@@ -227,6 +297,7 @@ export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
   const setDirection = useReader((s) => s.setDirection)
   const togglePageOffset = useReader((s) => s.togglePageOffset)
   const toggleAutoCrop = useReader((s) => s.toggleAutoCrop)
+  const toggleAutoScroll = useReader((s) => s.toggleAutoScroll)
   const toggleThumbStrip = useReader((s) => s.toggleThumbStrip)
   const next = useReader((s) => s.next)
   const prev = useReader((s) => s.prev)
@@ -325,6 +396,17 @@ export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
           </button>
         )}
 
+        {mode === 'scroll' && (
+          <button
+            className={autoScroll ? 'btn btn-sm btn-ghost active' : 'btn btn-sm btn-ghost'}
+            onClick={toggleAutoScroll}
+            title="自动翻页方式 (S)：平滑向下滚动（条漫） / 按屏翻"
+          >
+            <Icon name="arrow-down" size={14} />
+            {autoScroll ? '平滑滚动' : '按屏翻'}
+          </button>
+        )}
+
         <button
           className={autoCrop ? 'btn btn-sm btn-ghost active' : 'btn btn-sm btn-ghost'}
           onClick={toggleAutoCrop}
@@ -343,8 +425,15 @@ export function ReaderBottomBar({ visible, pin }: BarProps): ReactNode {
           缩略图
         </button>
 
-        <AutoTurnControls />
+        <AutoTurnSlot />
       </div>
     </div>
   )
+}
+
+/** 滚动模式 + 平滑滚动时显示速度控件，其余情况显示间隔控件 */
+function AutoTurnSlot(): ReactNode {
+  const mode = useReader((s) => s.mode)
+  const autoScroll = useReader((s) => s.autoScroll)
+  return mode === 'scroll' && autoScroll ? <AutoScrollControls /> : <AutoTurnControls />
 }

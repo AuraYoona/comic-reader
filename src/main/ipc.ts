@@ -5,12 +5,14 @@ import { IPC } from '@shared/ipc'
 import type { ImportKind } from '@shared/api'
 import {
   CATEGORY_NAME_MAX,
+  COMIC_STYLE_IDS,
   TITLE_MAX,
   type BackupResult,
   type BatchRescanResult,
   type CategoryMutationResult,
   type CategoryPatch,
   type Comic,
+  type ComicStyle,
   type OpenComicResult,
   type ProgressPatch,
   type RelocateResult,
@@ -402,6 +404,21 @@ export function registerIpcHandlers(getWindow: GetWindow): void {
     if (!comic) return null
     if (page < 0 || page >= comic.pageCount) return comic
     return db.toggleBookmark(id, page)
+  })
+
+  ipcMain.handle(IPC.ComicSetStyle, (_e, ids: unknown, style: unknown): Comic[] => {
+    const list = stringList(ids)
+    if (list.length === 0) return []
+    // null 表示摘掉标签；其它值必须在白名单里，非法值直接拒绝而不是悄悄当成 null
+    if (style !== null && !COMIC_STYLE_IDS.includes(style as ComicStyle)) return []
+    const changed = db.setComicsStyle(list, style as ComicStyle | null)
+    if (changed.length > 0) {
+      logger.info(
+        'library',
+        `${style ? `打上类型标签 ${style}` : '摘掉类型标签'}：${changed.length} 本`
+      )
+    }
+    return changed
   })
 
   // ---------- 封面 ----------

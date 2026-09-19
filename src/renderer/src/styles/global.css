@@ -318,6 +318,10 @@ button {
 .dropdown-menu button.danger {
   color: var(--danger);
 }
+.dropdown-menu button.active {
+  color: var(--accent);
+  font-weight: 500;
+}
 
 /* ---- 自定义下拉选择器（Select） ---- */
 .select-trigger {
@@ -547,6 +551,30 @@ button {
   color: #fff;
   font-size: 11px;
   pointer-events: none;
+}
+
+/* 类型标签徽标：封面右下角（右上角是菜单按钮）/ 阅读器标题前 */
+.style-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.card-style {
+  position: absolute;
+  right: 8px;
+  bottom: 12px;
+  pointer-events: none;
+  z-index: 2;
+}
+.reader-title .style-badge {
+  margin-right: 8px;
+  vertical-align: 1px;
 }
 
 .card-missing {

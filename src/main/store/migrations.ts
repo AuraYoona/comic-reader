@@ -11,9 +11,10 @@
  *   v3  settings 增加 extensions（扩展开关）、顶层增加 categories（分类集合）、comic 增加 categoryIds
  *   v4  comic 增加 bookmarks；settings 增加阅读器增强项（双页封面/跨页、亮度、自动翻页、
  *       侧键翻页、自动裁边）与库根目录（libraryRoots / autoScanRoots）；extensions 增加 bookmarks
+ *   v5  comic 增加 style（类型标签：日漫 / 韩漫 / 国漫 / 美漫）；settings 增加 autoScrollSpeed（条漫平滑滚动速度）
  */
 
-export const CURRENT_SCHEMA_VERSION = 4
+export const CURRENT_SCHEMA_VERSION = 5
 
 type AnyRecord = Record<string, unknown>
 
@@ -67,6 +68,17 @@ const MIGRATIONS: Record<number, (data: AnyRecord) => AnyRecord> = {
         extensions: { bookmarks: false, ...extensions }
       },
       comics: comics.map((c) => (c && typeof c === 'object' ? { bookmarks: [], ...c } : c))
+    }
+  },
+  4: (data) => {
+    const settings = (data.settings ?? {}) as AnyRecord
+    const comics = Array.isArray(data.comics) ? data.comics : []
+    return {
+      ...data,
+      version: 5,
+      // 默认值放前面：老数据里已有同名字段时以老数据为准
+      settings: { autoScrollSpeed: 80, ...settings },
+      comics: comics.map((c) => (c && typeof c === 'object' ? { style: null, ...c } : c))
     }
   }
 }

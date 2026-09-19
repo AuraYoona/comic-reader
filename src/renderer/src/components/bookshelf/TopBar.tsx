@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-import type { SortKey } from '@shared/types'
+import { COMIC_STYLES, type SortKey } from '@shared/types'
 import DropdownMenu from '@/components/common/DropdownMenu'
 import Select from '@/components/common/Select'
 import { Icon } from '@/components/common/Icon'
 import { resolvedThemeIsDark, useSettings } from '@/store/settings'
-import { UNCATEGORIZED_ID, useLibrary } from '@/store/library'
+import { UNCATEGORIZED_ID, UNSTYLED_ID, useLibrary, type StyleFilter } from '@/store/library'
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'lastReadAt', label: '最近阅读' },
@@ -12,8 +12,13 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'addedAt', label: '导入时间' }
 ]
 
-/** 分类筛选里代表“全部”的哨兵值（分类 id 不会是空串） */
+/** 分类 / 类型筛选里代表“全部”的哨兵值（分类 id 与类型 id 都不会是空串） */
 const ALL_CATEGORIES = ''
+
+const STYLE_OPTIONS: { value: StyleFilter & string; label: string }[] = [
+  { value: UNSTYLED_ID, label: '未标记' },
+  ...COMIC_STYLES.map((s) => ({ value: s.id, label: s.label }))
+]
 
 const SEARCH_DEBOUNCE_MS = 150
 
@@ -35,6 +40,8 @@ export default function TopBar({
   const categories = useLibrary((s) => s.categories)
   const activeCategoryId = useLibrary((s) => s.activeCategoryId)
   const setActiveCategory = useLibrary((s) => s.setActiveCategory)
+  const activeStyle = useLibrary((s) => s.activeStyle)
+  const setActiveStyle = useLibrary((s) => s.setActiveStyle)
   const importFrom = useLibrary((s) => s.importFrom)
   const importing = useLibrary((s) => s.importing.active)
   const theme = useSettings((s) => s.settings.theme)
@@ -122,6 +129,16 @@ export default function TopBar({
             </button>
           </>
         )}
+
+        <div className="sort-box" title="按类型标签筛选">
+          <span className="sort-label">类型</span>
+          <Select
+            ariaLabel="按类型标签筛选"
+            value={activeStyle ?? ALL_CATEGORIES}
+            options={[{ value: ALL_CATEGORIES, label: '全部' }, ...STYLE_OPTIONS]}
+            onChange={(v) => setActiveStyle(v === ALL_CATEGORIES ? null : (v as StyleFilter))}
+          />
+        </div>
 
         <div className="sort-box" title="排序方式">
           <span className="sort-label">排序</span>

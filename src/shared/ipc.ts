@@ -50,6 +50,8 @@ export const IPC = {
   ComicToggleCategoryMany: 'comic:toggle-category-many',
   /** invoke: 增删一个书签页（「书签」扩展功能） */
   ComicToggleBookmark: 'comic:toggle-bookmark',
+  /** invoke: 给多本漫画打 / 摘类型标签（日漫、韩漫……），同时写入对应的阅读预设 */
+  ComicSetStyle: 'comic:set-style',
 
   /** invoke: 渲染进程回传重新压缩过的封面 JPEG（nativeImage 解不了 WebP/AVIF 等格式） */
   CoverSaveThumb: 'cover:save-thumb',

@@ -6,6 +6,7 @@ import type {
   CategoryMutationResult,
   CategoryPatch,
   Comic,
+  ComicStyle,
   ImportResult,
   OpenComicResult,
   ProgressPatch,
@@ -92,6 +93,9 @@ export interface RendererApi {
 
   /** 「书签」扩展功能：增删一个书签页，返回更新后的记录 */
   toggleBookmark(id: string, page: number): Promise<Comic | null>
+
+  /** 给多本漫画打 / 摘类型标签（null = 摘掉），预设会写进各本的阅读偏好；返回改动过的记录 */
+  setComicStyle(ids: string[], style: ComicStyle | null): Promise<Comic[]>
 
   /**
    * 回传渲染进程重新压缩过的封面 JPEG。

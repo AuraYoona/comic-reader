@@ -8,6 +8,8 @@ export type IconName =
   | 'sun'
   | 'moon'
   | 'arrow-left'
+  | 'arrow-down'
+  | 'style'
   | 'close'
   | 'maximize'
   | 'minimize'
@@ -91,6 +93,19 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <line x1="19" y1="12" x2="5" y2="12" />
       <polyline points="12 19 5 12 12 5" />
+    </>
+  ),
+  'arrow-down': (
+    <>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <polyline points="5 12 12 19 19 12" />
+    </>
+  ),
+  // 类型标签：一张带书签角的卡片
+  style: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M9 3v7l2.5-2 2.5 2V3" />
     </>
   ),
   close: (

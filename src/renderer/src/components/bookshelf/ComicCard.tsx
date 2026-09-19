@@ -1,5 +1,5 @@
 import { memo, useCallback, useRef, useState, type ReactNode } from 'react'
-import type { Comic } from '@shared/types'
+import { COMIC_STYLES, comicStyleInfo, type Comic } from '@shared/types'
 import DropdownMenu from '@/components/common/DropdownMenu'
 import { Icon } from '@/components/common/Icon'
 import { useLibrary } from '@/store/library'
@@ -47,6 +47,7 @@ function ComicCard({
   const percent = readPercent(comic.lastReadAt, comic.lastReadPage, comic.pageCount)
   const finished = percent >= 100
   const hasCover = comic.coverFile && !coverFailed
+  const style = comicStyleInfo(comic.style)
 
   /** Shift 连选 / Ctrl 点选 / 已进入多选时的普通点击，都不该打开漫画 */
   const onCardClick = (e: React.MouseEvent): void => {
@@ -89,6 +90,11 @@ function ComicCard({
         )}
 
         {!selectionActive && <span className="card-pages">{comic.pageCount} 页</span>}
+        {style && (
+          <span className="card-style style-badge" title={style.hint}>
+            {style.label}
+          </span>
+        )}
         {missing && <span className="card-missing">来源丢失</span>}
 
         <button
@@ -199,6 +205,22 @@ function ComicCard({
             设置分类…
           </button>
         )}
+        <span className="dropdown-section">类型标签（决定阅读方式）</span>
+        {COMIC_STYLES.map((s) => (
+          <button
+            key={s.id}
+            className={comic.style === s.id ? 'active' : undefined}
+            title={s.hint}
+            onClick={() => {
+              closeMenu()
+              // 再点一次已选中的标签即摘掉
+              void useLibrary.getState().setStyle([comic.id], comic.style === s.id ? null : s.id)
+            }}
+          >
+            <Icon name={comic.style === s.id ? 'check' : 'style'} size={14} />
+            {s.label}
+          </button>
+        ))}
         <button
           className="danger"
           onClick={() => {

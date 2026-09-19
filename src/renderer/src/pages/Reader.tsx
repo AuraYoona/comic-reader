@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import { AUTO_SCROLL_STEP } from '@shared/types'
 import { Icon } from '@/components/common/Icon'
 import { Spinner } from '@/components/common/Feedback'
 import PagedView from '@/components/reader/PagedView'
@@ -7,7 +8,7 @@ import { ReaderBottomBar, ReaderTopBar } from '@/components/reader/ReaderBars'
 import { useAutoHide } from '@/hooks/useAutoHide'
 import { scrollBus } from '@/lib/scrollBus'
 import { useReader } from '@/store/reader'
-import { setAutoTurnSeconds, useSettings } from '@/store/settings'
+import { setAutoScrollSpeed, setAutoTurnSeconds, useSettings } from '@/store/settings'
 
 const BARS_HIDE_DELAY_MS = 2600
 
@@ -15,7 +16,8 @@ const BARS_HIDE_DELAY_MS = 2600
  * 阅读器全屏覆盖层。
  * 键盘：← → 翻页（尊重阅读方向）、空格下一页、Esc 退出、F 全屏、
  *      PgUp/PgDn/Home/End、+/-/0 缩放、1/2/3 切换模式、
- *      B 书签、T 缩略图条、A 自动翻页、[ / ] 自动翻页间隔、O 双页偏移、C 自动裁边。
+ *      B 书签、T 缩略图条、A 自动翻页、[ / ] 自动翻页间隔（平滑滚动时调速度）、
+ *      S 平滑滚动 / 按屏翻（滚动模式）、O 双页偏移、C 自动裁边。
  */
 export default function Reader(): ReactNode {
   const opening = useReader((s) => s.opening)
@@ -23,10 +25,12 @@ export default function Reader(): ReactNode {
   const comic = useReader((s) => s.comic)
   const mode = useReader((s) => s.mode)
   const autoTurn = useReader((s) => s.autoTurn)
+  const autoScroll = useReader((s) => s.autoScroll)
   const endHint = useReader((s) => s.endHint)
   const close = useReader((s) => s.close)
   const brightness = useSettings((s) => s.settings.brightness)
   const autoTurnSeconds = useSettings((s) => s.settings.autoTurnSeconds)
+  const autoScrollSpeed = useSettings((s) => s.settings.autoScrollSpeed)
 
   const { visible, poke, toggle, pin } = useAutoHide(BARS_HIDE_DELAY_MS)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -54,15 +58,35 @@ export default function Reader(): ReactNode {
   }
 
   // 自动翻页：滚动模式按屏滚动，其余按屏翻页；翻到尽头时 next() 会自行停下
+  // 条漫（autoScroll）例外：不按间隔跳，而是每帧匀速向下平滑滚动，到底后走尽头提示
+  const smoothScrolling = autoTurn && mode === 'scroll' && autoScroll
   useEffect(() => {
-    if (!autoTurn) return
+    if (!autoTurn || smoothScrolling) return
     const id = window.setInterval(() => {
       const store = useReader.getState()
       if (store.mode === 'scroll') scrollBus.scrollByViewport?.(0.85)
       else store.next()
     }, autoTurnSeconds * 1000)
     return () => window.clearInterval(id)
-  }, [autoTurn, autoTurnSeconds])
+  }, [autoTurn, smoothScrolling, autoTurnSeconds])
+
+  useEffect(() => {
+    if (!smoothScrolling) return
+    let raf = 0
+    let last = performance.now()
+    const tick = (now: number): void => {
+      // 窗口切到后台时 rAF 暂停，回来后 dt 会很大，夹一下防止一次跳一大段
+      const dt = Math.min(now - last, 100) / 1000
+      last = now
+      if (scrollBus.scrollByPixels?.(autoScrollSpeed * dt) === false) {
+        useReader.getState().reachEnd()
+        return
+      }
+      raf = window.requestAnimationFrame(tick)
+    }
+    raf = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(raf)
+  }, [smoothScrolling, autoScrollSpeed])
 
   // 键盘快捷键（读 getState 避免闭包过期）
   useEffect(() => {
@@ -180,11 +204,22 @@ export default function Reader(): ReactNode {
           break
         case '[':
           e.preventDefault()
-          setAutoTurnSeconds(useSettings.getState().settings.autoTurnSeconds - 1)
+          if (store.mode === 'scroll' && store.autoScroll)
+            setAutoScrollSpeed(useSettings.getState().settings.autoScrollSpeed - AUTO_SCROLL_STEP)
+          else setAutoTurnSeconds(useSettings.getState().settings.autoTurnSeconds - 1)
           break
         case ']':
           e.preventDefault()
-          setAutoTurnSeconds(useSettings.getState().settings.autoTurnSeconds + 1)
+          if (store.mode === 'scroll' && store.autoScroll)
+            setAutoScrollSpeed(useSettings.getState().settings.autoScrollSpeed + AUTO_SCROLL_STEP)
+          else setAutoTurnSeconds(useSettings.getState().settings.autoTurnSeconds + 1)
+          break
+        case 's':
+        case 'S':
+          if (plain && store.mode === 'scroll') {
+            e.preventDefault()
+            store.toggleAutoScroll()
+          }
           break
         case 'o':
         case 'O':

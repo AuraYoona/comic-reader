@@ -32,6 +32,7 @@ function makeComic(id: string, over: Record<string, unknown> = {}): any {
     reader: {},
     categoryIds: [],
     bookmarks: [],
+    style: null,
     ...over
   }
 }
@@ -87,10 +88,36 @@ describe('迁移与自愈', () => {
       comics: [{ id: 'a', title: 'A', sourcePath: 'D:/a', categoryIds: [] }]
     })
     expect(db.listComics()[0].bookmarks).toEqual([])
+    expect(db.listComics()[0].style).toBeNull()
     expect(db.getSettings().extensions).toEqual({ categories: true, bookmarks: false })
     expect(db.getSettings().theme).toBe('dark')
+    expect(db.getSettings().autoScrollSpeed).toBe(80)
     expect(readLibrary().version).toBe(CURRENT_SCHEMA_VERSION)
     expect(fs.existsSync(`${libraryPath()}.v3.bak`)).toBe(true)
+  })
+
+  it('v4 数据升到 v5：comic 补 style，settings 补 autoScrollSpeed，已有值不被覆盖', () => {
+    seed({
+      version: 4,
+      settings: { autoScrollSpeed: 120 },
+      categories: [],
+      comics: [
+        { id: 'a', title: 'A', sourcePath: 'D:/a', categoryIds: [], bookmarks: [] },
+        { id: 'b', title: 'B', sourcePath: 'D:/b', categoryIds: [], bookmarks: [], style: 'manhwa' }
+      ]
+    })
+    expect(db.listComics().map((c) => c.style)).toEqual([null, 'manhwa'])
+    expect(db.getSettings().autoScrollSpeed).toBe(120)
+  })
+
+  it('未知的类型标签值视为未打标签', () => {
+    seed({
+      version: CURRENT_SCHEMA_VERSION,
+      settings: {},
+      categories: [],
+      comics: [makeComic('a', { style: '火星漫' }), makeComic('b', { style: 'manga' })]
+    })
+    expect(db.listComics().map((c) => c.style)).toEqual([null, 'manga'])
   })
 
   it('文件损坏时备份原文件并以空库启动，不让应用起不来', () => {
@@ -148,6 +175,9 @@ describe('设置清洗', () => {
     expect(s.cardSize).toBe('medium')
     expect(s.brightness).toBe(1.2) // 夹到上限
     expect(s.autoTurnSeconds).toBe(2) // 夹到下限
+    expect(s.autoScrollSpeed).toBe(80) // 未提供时保持默认
+    expect(db.saveSettings({ autoScrollSpeed: 9999 }).autoScrollSpeed).toBe(400) // 夹到上限
+    expect(db.saveSettings({ autoScrollSpeed: 83 }).autoScrollSpeed).toBe(80) // 按步进取整
     expect(s.extensions).toEqual({ categories: false, bookmarks: false })
     expect('不存在的扩展' in s.extensions).toBe(false)
   })
@@ -212,6 +242,29 @@ describe('漫画记录', () => {
     db.updateComic('a', { reader: { mode: 'double' } })
     db.updateComic('a', { reader: { zoomScale: 1.5 } })
     expect(db.getComic('a')!.reader).toEqual({ mode: 'double', zoomScale: 1.5 })
+  })
+
+  it('打类型标签会把该类型的阅读预设写进 reader，摘标签则保留偏好', () => {
+    db.updateComic('a', { reader: { mode: 'double', direction: 'ltr', zoomScale: 1.5 } })
+    const changed = db.setComicsStyle(['a', '不存在'], 'manhwa')
+    expect(changed.map((c) => c.id)).toEqual(['a'])
+    const a = db.getComic('a')!
+    expect(a.style).toBe('manhwa')
+    // 预设覆盖模式 / 方向 / 自动滚动，与预设无关的缩放保持原样
+    expect(a.reader).toMatchObject({ mode: 'scroll', direction: 'ltr', autoScroll: true })
+    expect(a.reader.zoomScale).toBe(1.5)
+
+    // 再打一次同样的标签仍会重新写入预设（用户在阅读器里改过后可借此复位）
+    db.updateComic('a', { reader: { mode: 'single' } })
+    expect(db.setComicsStyle(['a'], 'manhwa')).toHaveLength(1)
+    expect(db.getComic('a')!.reader.mode).toBe('scroll')
+
+    // 摘掉标签：style 归 null，偏好不动
+    db.setComicsStyle(['a'], null)
+    expect(db.getComic('a')!.style).toBeNull()
+    expect(db.getComic('a')!.reader.mode).toBe('scroll')
+    // 已经没有标签时再摘一次不算改动
+    expect(db.setComicsStyle(['a'], null)).toEqual([])
   })
 })
 

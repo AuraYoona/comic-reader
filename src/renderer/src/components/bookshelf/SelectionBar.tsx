@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { COMIC_STYLES } from '@shared/types'
 import DropdownMenu from '@/components/common/DropdownMenu'
 import { Icon } from '@/components/common/Icon'
 import { useLibrary } from '@/store/library'
@@ -19,12 +20,16 @@ export default function SelectionBar({ visibleIds, onRemove }: SelectionBarProps
   const rescanMany = useLibrary((s) => s.rescanMany)
   const relocate = useLibrary((s) => s.relocate)
   const setCategoryMany = useLibrary((s) => s.setCategoryMany)
+  const setStyle = useLibrary((s) => s.setStyle)
   const busy = useLibrary((s) => s.importing.active)
   const categoriesEnabled = useSettings((s) => s.settings.extensions.categories)
 
   const [catOpen, setCatOpen] = useState(false)
   const catBtnRef = useRef<HTMLButtonElement>(null)
   const closeCat = useCallback(() => setCatOpen(false), [])
+  const [styleOpen, setStyleOpen] = useState(false)
+  const styleBtnRef = useRef<HTMLButtonElement>(null)
+  const closeStyle = useCallback(() => setStyleOpen(false), [])
 
   const count = selectedIds.size
   if (count === 0) return null
@@ -79,6 +84,43 @@ export default function SelectionBar({ visibleIds, onRemove }: SelectionBarProps
           </DropdownMenu>
         </>
       )}
+
+      <button
+        ref={styleBtnRef}
+        className="btn btn-sm btn-ghost"
+        onClick={() => setStyleOpen((v) => !v)}
+        title="类型标签决定阅读方式：日漫从右到左、韩漫平滑向下滚动……"
+      >
+        <Icon name="style" size={14} />
+        类型
+        <Icon name="chevron-down" size={12} />
+      </button>
+      <DropdownMenu open={styleOpen} anchorRef={styleBtnRef} align="left" onClose={closeStyle}>
+        <span className="dropdown-section">标为</span>
+        {COMIC_STYLES.map((s) => (
+          <button
+            key={s.id}
+            title={s.hint}
+            onClick={() => {
+              closeStyle()
+              void setStyle(ids, s.id)
+            }}
+          >
+            <Icon name="style" size={14} />
+            {s.label}
+          </button>
+        ))}
+        <span className="dropdown-section">清除</span>
+        <button
+          onClick={() => {
+            closeStyle()
+            void setStyle(ids, null)
+          }}
+        >
+          <Icon name="close" size={14} />
+          摘掉类型标签
+        </button>
+      </DropdownMenu>
 
       <button className="btn btn-sm btn-ghost" disabled={busy} onClick={() => void rescanMany(ids)}>
         <Icon name="refresh" size={14} />

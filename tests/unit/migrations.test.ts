@@ -160,7 +160,29 @@ describe('migrateLibraryData', () => {
     expect((data.comics as Record<string, unknown>[])[0].bookmarks).toEqual([3, 7])
   })
 
-  it('v1 → v4 一路补齐所有版本引入的字段', () => {
+  it('v4 → v5：settings 补上 autoScrollSpeed，每本漫画补上 style；已有值不覆盖', () => {
+    const v4 = {
+      version: 4,
+      settings: { theme: 'dark' },
+      categories: [],
+      comics: [
+        { id: 'a', title: 'A', sourcePath: 'C:/a', categoryIds: [], bookmarks: [] },
+        { id: 'b', title: 'B', sourcePath: 'C:/b', categoryIds: [], bookmarks: [], style: 'manga' }
+      ]
+    }
+    const { data, migrated, fromVersion } = migrateLibraryData(v4)
+    expect(migrated).toBe(true)
+    expect(fromVersion).toBe(4)
+    expect(data.version).toBe(5)
+    const settings = data.settings as Record<string, unknown>
+    expect(settings.theme).toBe('dark')
+    expect(settings.autoScrollSpeed).toBe(80)
+    const comics = data.comics as Record<string, unknown>[]
+    expect(comics[0].style).toBeNull()
+    expect(comics[1].style).toBe('manga')
+  })
+
+  it('v1 → v5 一路补齐所有版本引入的字段', () => {
     const v1 = {
       version: 1,
       settings: { theme: 'light' },
@@ -173,9 +195,11 @@ describe('migrateLibraryData', () => {
     expect(settings.cardSize).toBe('medium')
     expect(settings.extensions).toEqual({ categories: false, bookmarks: false })
     expect(settings.autoScanRoots).toBe(true)
+    expect(settings.autoScrollSpeed).toBe(80)
     const comic = (data.comics as Record<string, unknown>[])[0]
     expect(comic.categoryIds).toEqual([])
     expect(comic.bookmarks).toEqual([])
+    expect(comic.style).toBeNull()
   })
 
   it('来自未来版本的数据：不降级改写，原样返回', () => {

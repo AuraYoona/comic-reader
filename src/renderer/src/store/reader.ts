@@ -30,6 +30,8 @@ interface ReaderState {
   pageOffset: PageOffset
   /** 自动裁白边 */
   autoCrop: boolean
+  /** 滚动模式下自动翻页改为匀速平滑滚动（条漫习惯） */
+  autoScroll: boolean
   /** 已经加载并确认为横向跨页的页码 */
   widePages: Set<number>
   /** 书签页码，与主进程记录保持同步 */
@@ -53,6 +55,10 @@ interface ReaderState {
   setPageOffset: (o: PageOffset) => void
   togglePageOffset: () => void
   toggleAutoCrop: () => void
+  /** 滚动模式的自动翻页：平滑滚动 ↔ 按屏翻 */
+  toggleAutoScroll: () => void
+  /** 平滑滚动已经到底：走「再翻一次返回书架」的尽头提示 */
+  reachEnd: () => void
   /** 图片加载后回报是否为跨页图 */
   markWide: (index: number, wide: boolean) => void
   /** 增删当前页（或指定页）的书签 */
@@ -81,12 +87,13 @@ async function flushPersist(): Promise<void> {
     persistTimer = null
   }
   // 状态在任何 await 之前同步读取，close() 之后不会误存
-  const { comic, page, mode, zoom, scale, direction, pageOffset, autoCrop } = useReader.getState()
+  const { comic, page, mode, zoom, scale, direction, pageOffset, autoCrop, autoScroll } =
+    useReader.getState()
   if (!comic) return
   try {
     const updated = await window.api.updateProgress(comic.id, {
       lastReadPage: page,
-      reader: { mode, zoom, zoomScale: scale, direction, pageOffset, autoCrop }
+      reader: { mode, zoom, zoomScale: scale, direction, pageOffset, autoCrop, autoScroll }
     })
     if (updated) useLibrary.getState().applyComicPatch(updated)
   } catch {
@@ -134,6 +141,7 @@ export const useReader = create<ReaderState>()((set, get) => {
     direction: 'ltr',
     pageOffset: 1,
     autoCrop: false,
+    autoScroll: false,
     widePages: new Set<number>(),
     bookmarks: [],
     autoTurn: false,
@@ -166,6 +174,8 @@ export const useReader = create<ReaderState>()((set, get) => {
         direction: prefs.direction ?? defaults.readingDirection,
         pageOffset: prefs.pageOffset ?? (defaults.doubleCoverSingle ? 1 : 0),
         autoCrop: prefs.autoCrop ?? defaults.autoCrop,
+        // 没打过标签也没手动切过的本子按屏翻；打过韩漫/国漫标签的预设里已经是 true
+        autoScroll: prefs.autoScroll ?? false,
         widePages: new Set<number>(),
         bookmarks: res.comic.bookmarks,
         autoTurn: false,
@@ -273,6 +283,13 @@ export const useReader = create<ReaderState>()((set, get) => {
       set({ autoCrop: !get().autoCrop })
       schedulePersist()
     },
+
+    toggleAutoScroll: () => {
+      set({ autoScroll: !get().autoScroll })
+      schedulePersist()
+    },
+
+    reachEnd: hitEnd,
 
     markWide: (index, wide) => {
       const { widePages } = get()

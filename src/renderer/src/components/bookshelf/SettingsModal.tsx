@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
+  AUTO_SCROLL_MAX,
+  AUTO_SCROLL_MIN,
+  AUTO_SCROLL_STEP,
   AUTO_TURN_MAX,
   AUTO_TURN_MIN,
   BRIGHTNESS_MAX,
@@ -371,6 +374,23 @@ export default function SettingsModal({ onClose }: { onClose: () => void }): Rea
             onChange={(e) => void update({ autoTurnSeconds: Number(e.target.value) })}
           />
           <span className="settings-range-value">{settings.autoTurnSeconds} 秒</span>
+        </div>
+      </Row>
+      <Row
+        label="条漫平滑滚动速度"
+        hint="标为韩漫 / 国漫的本子在滚动模式下自动翻页会匀速向下滚动，阅读时按 S 可切回按屏翻"
+      >
+        <div className="settings-range">
+          <input
+            type="range"
+            className="reader-slider"
+            min={AUTO_SCROLL_MIN}
+            max={AUTO_SCROLL_MAX}
+            step={AUTO_SCROLL_STEP}
+            value={settings.autoScrollSpeed}
+            onChange={(e) => void update({ autoScrollSpeed: Number(e.target.value) })}
+          />
+          <span className="settings-range-value">{settings.autoScrollSpeed} px/s</span>
         </div>
       </Row>
 
