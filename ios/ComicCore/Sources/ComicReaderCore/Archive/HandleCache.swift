@@ -1,0 +1,134 @@
+import Foundation
+
+// MARK: - 压缩包句柄的 LRU 缓存（src/main/archive/handleCache.ts 的移植）
+//
+// 阅读时会按页反复读同一个文件，每页重新打开一次代价很高（ZIP 要重解中央目录，
+// RAR / PDF 要重新把整个文件读进内存）。这里按「文件路径 → 已打开的句柄」缓存，
+// 空闲超时或超过上限时释放。同一个文件的并发打开会合并成一次。
+
+public struct HandleCacheOptions<T> {
+    /// 同时保留的句柄上限，超出时按最旧淘汰
+    public let max: Int
+    /// 空闲多久自动释放（秒）
+    public let idleSeconds: Double
+    /// 打开句柄
+    public let open: @Sendable (String) throws -> T
+    /// 释放句柄，不允许抛错
+    public let close: @Sendable (T) -> Void
+
+    public init(
+        max: Int,
+        idleSeconds: Double,
+        open: @escaping @Sendable (String) throws -> T,
+        close: @escaping @Sendable (T) -> Void
+    ) {
+        self.max = max
+        self.idleSeconds = idleSeconds
+        self.open = open
+        self.close = close
+    }
+}
+
+public final class HandleCache<T>: @unchecked Sendable {
+    private struct Entry {
+        let value: T
+        var timer: DispatchSourceTimer?
+    }
+
+    private let options: HandleCacheOptions<T>
+    private var entries: [String: Entry] = [:]     // 字典 + 手动维护 LRU 顺序
+    private var order: [String] = []                // 头部最旧、尾部最新
+    private var pending: [String: Task<T, Error>] = [:]
+    private let queue = DispatchQueue(label: "com.aurayoona.comicreader.handlecache")
+
+    public init(options: HandleCacheOptions<T>) {
+        self.options = options
+    }
+
+    private func scheduleRelease(_ key: String) -> DispatchSourceTimer {
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + options.idleSeconds)
+        timer.setEventHandler { [weak self] in
+            self?.release(key)
+        }
+        timer.resume()
+        return timer
+    }
+
+    /// 命中：刷新计时器并把 key 移到 LRU 尾部
+    private func touch(_ key: String, _ entry: inout Entry) {
+        entry.timer?.cancel()
+        entry.timer = scheduleRelease(key)
+        order.removeAll { $0 == key }
+        order.append(key)
+    }
+
+    public func acquire(_ key: String) async throws -> T {
+        // 快路径：已缓存
+        var hit: T?
+        queue.sync {
+            if var entry = entries[key] {
+                touch(key, &entry)
+                entries[key] = entry
+                hit = entry.value
+            }
+        }
+        if let hit { return hit }
+
+        // 注册打开任务：谁先注册谁执行，后来的等待同一个任务
+        let task: Task<T, Error> = queue.sync { () -> Task<T, Error> in
+            if let inflight = pending[key] { return inflight }
+            let newTask = Task<T, Error> { [weak self] in
+                guard let self else { throw SourceError("handle cache released") }
+                let value = try self.options.open(key)
+                // 打开完成后入缓存（打开期间可能已被 release：新句柄天然是最新的，直接入缓存即可）
+                self.insert(key: key, value: value)
+                return value
+            }
+            pending[key] = newTask
+            return newTask
+        }
+        do {
+            let value = try await task.value
+            return value
+        } catch {
+            queue.sync { if pending[key] === task { pending[key] = nil } }
+            throw error
+        }
+    }
+
+    /// 打开完成后把句柄放入缓存；先淘汰超限的最旧条目
+    private func insert(key: String, value: T) {
+        queue.sync {
+            pending[key] = nil
+            while entries.count >= options.max {
+                guard let oldest = order.first else { break }
+                releaseLocked(oldest)
+            }
+            var entry = Entry(value: value, timer: nil)
+            entry.timer = scheduleRelease(key)
+            entries[key] = entry
+            order.append(key)
+        }
+    }
+
+    private func releaseLocked(_ key: String) {
+        guard let entry = entries[key] else { return }
+        entry.timer?.cancel()
+        entries[key] = nil
+        order.removeAll { $0 == key }
+        // 关闭失败无需处理，句柄已从缓存移除
+        options.close(entry.value)
+    }
+
+    /// 主动释放某个句柄（文件被替换、读取失败重试时用）
+    public func release(_ key: String) {
+        queue.sync { releaseLocked(key) }
+    }
+
+    public func releaseAll() {
+        queue.sync {
+            for key in order { releaseLocked(key) }
+        }
+    }
+}
