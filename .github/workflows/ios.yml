@@ -1,0 +1,38 @@
+name: iOS
+
+# iOS 移植的构建与验证链路（无 Mac 开发环境）：
+#   1. macOS runner 上跑 ComicReaderCore 的单元测试（移植逻辑的完整验证）
+#   2. 构建 iOS App 目标（当前阶段：语法 / 类型门禁；后续阶段加上 xcodebuild + IPA）
+# 桌面版的 ci.yml / release.yml 完全不受影响。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+jobs:
+  core-tests:
+    name: ComicReaderCore unit tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Run core package tests
+        run: swift test --package-path ios/ComicCore
+
+      - name: Build core for iOS platform (cross-compile check)
+        run: |
+          # Core 包按 iOS 目标做一次编译检查（不需要模拟器）
+          xcrun swift build --package-path ios/ComicCore \
+            -Xswiftc -sdk -Xswiftc "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
+            -Xswiftc -target -Xswiftc arm64-apple-ios16.0-simulator
