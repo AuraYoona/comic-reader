@@ -54,6 +54,13 @@ NS_DESIGNATED_INITIALIZER
 @property (copy) NSString *lastArchivePath;
 @property (copy) NSString *lastFilepath;
 
+// [vendored] 上游只在 @implementation 里后置定义该方法（调用点在 1014/1286），
+// 新版 clang + ld-prime 会把它解析成未定义符号 —— 这里补上私有声明。
+- (BOOL)_unrarOpenFile:(NSString *)rarFile
+                inMode:(NSInteger)mode
+          withPassword:(NSString *)aPassword
+                 error:(NSError * __autoreleasing *)error;
+
 @end
 
 
