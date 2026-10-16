@@ -300,12 +300,13 @@ struct BookshelfView: View {
         case .settings:
             SettingsView()
         case .rename(let id):
-            if let comic = shelf.comics.first(where: { $0.id == id }) {
-                RenameSheet(comic: comic)
+            // 记录已不存在时自动关闭（对齐桌面版「live」解析）
+            if shelf.comics.contains(where: { $0.id == id }) {
+                RenameSheet(comicId: id)
             }
         case .assign(let id):
-            if let comic = shelf.comics.first(where: { $0.id == id }) {
-                CategoryAssignSheet(comic: comic, onOpenManager: {
+            if shelf.comics.contains(where: { $0.id == id }) {
+                CategoryAssignSheet(comicId: id, onOpenManager: {
                     managerDismissedAssignFor = id
                     self.sheet = .manager
                 })
