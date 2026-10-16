@@ -31,7 +31,8 @@ public final class PdfArchiveReader: ArchiveReader {
             let url = URL(fileURLWithPath: path)
             let attrs = try? FileManager.default.attributesOfItem(atPath: path)
             let size = (attrs?[.size] as? Int) ?? 0
-            if size > Self.maxBytes {
+            // 注意：存储属性初始化器里不能引用协变 Self，用具体类名
+            if size > PdfArchiveReader.maxBytes {
                 throw SourceError("这个 PDF 超过 1.5 GB，渲染需要整体载入内存，暂不支持", path: path)
             }
             guard let document = PDFDocument(url: url) else {
