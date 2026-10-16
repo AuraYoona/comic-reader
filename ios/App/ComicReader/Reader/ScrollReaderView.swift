@@ -15,7 +15,7 @@ struct ScrollReaderView: View {
     let onToggleBars: () -> Void
 
     /// 浮点累加器（平滑滚动的绝对位置；用户手动滚动时自动对齐）+ 观察者 token
-    private final class BusState {
+    private final class BusState: @unchecked Sendable {
         var autoPos: CGFloat = -1
         var tokens: [NSObjectProtocol] = []
     }
