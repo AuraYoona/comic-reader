@@ -378,7 +378,10 @@ public final class LibraryDatabase: @unchecked Sendable {
             comics: newData.comics,
             categories: newData.categories
         )
-        flushSync()
+        // 先标脏再同步落盘（对齐桌面版 dirty=true + flushSync 的语义：
+        // flushSync 只在有未落盘改动时写，不标脏会「恢复完却没写盘」）
+        saver.saveSoon()
+        saver.flushSync()
     }
 
     // MARK: 落盘

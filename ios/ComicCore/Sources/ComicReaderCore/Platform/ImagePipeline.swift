@@ -56,20 +56,33 @@ public struct ImagePipeline: Sendable {
         return out as Data
     }
 
-    /// 取原图；宽超过 maxWidth 时走缩略图接口降采样（不放大）
+    /// 取原图；宽超过 maxWidth 时按「宽度」比例降采样（不放大）。
+    /// 注意 CGImageSourceCreateThumbnailAtIndex 的 maxPixelSize 约束的是**最长边**，
+    /// 直接传 maxWidth 会让竖版图变得更窄——这里先按宽度算出比例，再换算成最长边上限。
     private static func scaledImage(from source: CGImageSource, maxWidth: Int) -> CGImage? {
         let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         let pixelWidth = (props?[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+        let pixelHeight = (props?[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
 
         if pixelWidth > 0, pixelWidth <= maxWidth {
             // 不放大：直接取原图
             return CGImageSourceCreateImageAtIndex(source, 0, nil)
         }
+
+        let maxDimension: Int
+        if pixelWidth > 0, pixelHeight > 0 {
+            // 宽度驱动的比例 → 最长边上限（结果宽度恰为 maxWidth）
+            let scale = Double(maxWidth) / Double(pixelWidth)
+            maxDimension = Int((Double(Swift.max(pixelWidth, pixelHeight)) * scale).rounded(.up))
+        } else {
+            // 尺寸未知：退化为最长边约束（桌面版此时依赖 nativeImage 自报的尺寸，等价近似）
+            maxDimension = maxWidth
+        }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxWidth
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
         ]
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }

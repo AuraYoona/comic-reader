@@ -89,6 +89,18 @@ final class ImagePipelineTests: XCTestCase {
         XCTAssertEqual(decodeSize(jpeg).width, 300)
     }
 
+    func testCoverIsWidthDrivenForPortraitImages() {
+        // 竖版封面（漫画常态）：结果宽度应为 480、高度按比例（桌面版语义是
+        // 「宽 > 480 才缩放」，不是「最长边 ≤ 480」）
+        let png = makePNG(width: 800, height: 1200, color: (80, 80, 200))
+        guard let jpeg = ImagePipeline.makeCover(from: png) else {
+            return XCTFail("makeCover 不应失败")
+        }
+        let size = decodeSize(jpeg)
+        XCTAssertEqual(size.width, ImagePipeline.coverWidth)
+        XCTAssertEqual(size.height, 720) // 800:1200 → 480:720
+    }
+
     func testCoverReturnsNilForGarbage() {
         XCTAssertNil(ImagePipeline.makeCover(from: Data([0x01, 0x02, 0x03])))
     }

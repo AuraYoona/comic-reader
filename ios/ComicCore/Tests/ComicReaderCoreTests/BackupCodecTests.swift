@@ -66,7 +66,7 @@ final class BackupCodecTests: XCTestCase {
         XCTAssertEqual(out.comics, 2)
         XCTAssertEqual(out.covers, 1)
         guard let dir = out.path else { return XCTFail("缺少备份目录") }
-        XCTAssertTrue(dir.hasSuffix("comic-reader-backup-"))
+        XCTAssertTrue((dir as NSString).lastPathComponent.hasPrefix("comic-reader-backup-"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: dir + "/library.json"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: dir + "/covers/cover-a.jpg"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: dir + "/covers/orphan.jpg"))
