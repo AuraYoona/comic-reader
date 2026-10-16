@@ -155,12 +155,13 @@ struct ComicCardView: View {
 
     private var statusText: Text {
         let percent = Format.readPercent(comic)
+        // 注意：Text.foregroundStyle 是 iOS 17 API；Text 上要用 foregroundColor（iOS 13+）
         if comic.lastReadAt == nil {
-            return Text("未读").foregroundStyle(.secondary)
+            return Text("未读").foregroundColor(.secondary)
         }
         if percent >= 100 {
-            return Text("已读完").foregroundStyle(Color(red: 0.25, green: 0.65, blue: 0.42))
+            return Text("已读完").foregroundColor(Color(red: 0.25, green: 0.65, blue: 0.42))
         }
-        return Text("已读 \(percent)%").foregroundStyle(.secondary)
+        return Text("已读 \(percent)%").foregroundColor(.secondary)
     }
 }

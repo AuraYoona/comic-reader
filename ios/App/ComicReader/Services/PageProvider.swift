@@ -40,13 +40,13 @@ final class PageProvider: ObservableObject {
 
     /// 缓存命中直接返回（同步，供首帧无闪）
     func cachedPage(comic: Comic, index: Int) -> UIImage? {
-        pageCache.object(forKey: key(comic, index))
+        pageCache.object(forKey: key(comic, index) as NSString)
     }
 
     /// 解码一页（带并发去重）；maxPixelSize = 目标最长边像素
     func page(comic: Comic, index: Int, maxPixelSize: Int) async -> UIImage? {
         let k = key(comic, index)
-        if let hit = pageCache.object(forKey: k) { return hit }
+        if let hit = pageCache.object(forKey: k as NSString) { return hit }
         if let running = inflight[k] { return await running.value }
 
         let task = Task<UIImage?, Never> { [weak self] in
@@ -57,7 +57,7 @@ final class PageProvider: ObservableObject {
                 return UIImage(cgImage: cg)
             }.value
             if let self, let decoded {
-                self.pageCache.setObject(decoded, forKey: k)
+                self.pageCache.setObject(decoded, forKey: k as NSString)
             }
             self?.clearInflight(k)
             return decoded
@@ -73,7 +73,7 @@ final class PageProvider: ObservableObject {
             let index = current + offset
             guard index >= 0, index < comic.pageCount else { continue }
             let k = key(comic, index)
-            if pageCache.object(forKey: k) != nil || inflight[k] != nil { continue }
+            if pageCache.object(forKey: k as NSString) != nil || inflight[k] != nil { continue }
             let task = Task<UIImage?, Never> { [weak self] in
                 let decoded: UIImage? = await Task.detached(priority: .utility) {
                     guard let bytes = try? readPage(comic, index: index),
@@ -82,7 +82,7 @@ final class PageProvider: ObservableObject {
                     return UIImage(cgImage: cg)
                 }.value
                 if let self, let decoded {
-                    self.pageCache.setObject(decoded, forKey: k)
+                    self.pageCache.setObject(decoded, forKey: k as NSString)
                 }
                 self?.clearInflight(k)
                 return decoded
@@ -95,7 +95,7 @@ final class PageProvider: ObservableObject {
 
     func thumbnail(comic: Comic, index: Int) async -> UIImage? {
         let k = key(comic, index)
-        if let hit = thumbCache.object(forKey: k) { return hit }
+        if let hit = thumbCache.object(forKey: k as NSString) { return hit }
         if let running = inflight["thumb:" + k] { return await running.value }
 
         let task = Task<UIImage?, Never> { [weak self] in
@@ -109,7 +109,7 @@ final class PageProvider: ObservableObject {
                 // 超过 512 KiB 的缩略图不缓存（对齐桌面版 protocol.ts）；成本 = 解码后占用
                 if decoded.jpegBytes <= Self.thumbCacheableMaxBytes {
                     let cost = decoded.image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-                    self.thumbCache.setObject(decoded.image, forKey: k, cost: cost)
+                    self.thumbCache.setObject(decoded.image, forKey: k as NSString, cost: cost)
                 }
             }
             self?.clearInflight("thumb:" + k)
@@ -168,7 +168,7 @@ final class PageProvider: ObservableObject {
         inflight[k] = nil
     }
 
-    private func key(_ comic: Comic, _ index: Int) -> NSString {
-        "\(comic.id):\(index)" as NSString
+    private func key(_ comic: Comic, _ index: Int) -> String {
+        "\(comic.id):\(index)"
     }
 }

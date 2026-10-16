@@ -66,7 +66,7 @@ final class ImportFlow {
         let destPath = uniqueDestination(for: name)
 
         do {
-            try fm.copyItem(at: url, toPath: destPath)
+            try fm.copyItem(at: url, to: URL(fileURLWithPath: destPath))
             if scoped { url.stopAccessingSecurityScopedResource() }
             return destPath
         } catch {
