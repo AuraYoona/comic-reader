@@ -37,6 +37,9 @@ let package = Package(
                 "Libraries/unrar/dll.cpp"
             ],
             publicHeadersPath: "Classes",
+            // 注意：不用 unsafeFlags（-Wno-everything）——SwiftPM 对依赖包的
+            // unsafe build flags 有限制，会直接让 swift test 失败。
+            // unrar 源码的告警不致命，容忍即可。
             cxxSettings: [
                 .headerSearchPath("Libraries/unrar"),
                 .headerSearchPath("Classes"),
@@ -45,8 +48,7 @@ let package = Package(
                 .define("UNRAR"),
                 .define("_UNIX"),
                 .define("_FILE_OFFSET_BITS", to: "64"),
-                .define("LARGEFILE_SOURCE"),
-                .unsafeFlags(["-Wno-everything"])
+                .define("LARGEFILE_SOURCE")
             ],
             linkerSettings: [
                 .linkedLibrary("z")
@@ -66,8 +68,7 @@ let package = Package(
                 .define("UNRAR"),
                 .define("_UNIX"),
                 .define("_FILE_OFFSET_BITS", to: "64"),
-                .define("LARGEFILE_SOURCE"),
-                .unsafeFlags(["-Wno-everything"])
+                .define("LARGEFILE_SOURCE")
             ]
         )
     ],
