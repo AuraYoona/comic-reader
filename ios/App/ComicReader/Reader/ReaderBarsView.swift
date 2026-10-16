@@ -1,5 +1,6 @@
 import SwiftUI
 import ComicReaderCore
+import UIKit
 
 // MARK: - 阅读器顶部工具条（ReaderBars.tsx TopBar 的移植）
 //

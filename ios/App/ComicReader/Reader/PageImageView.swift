@@ -1,5 +1,6 @@
 import SwiftUI
 import ComicReaderCore
+import UIKit
 
 // MARK: - 单页渲染（PageImage.tsx 的移植）
 //

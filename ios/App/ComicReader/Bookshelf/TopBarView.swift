@@ -1,5 +1,6 @@
 import SwiftUI
 import ComicReaderCore
+import UIKit
 
 // MARK: - 书架顶栏（TopBar.tsx 的移植：搜索 / 分类 / 类型 / 排序 / 导入 / 设置）
 

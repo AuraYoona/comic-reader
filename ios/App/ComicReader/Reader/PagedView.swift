@@ -1,5 +1,6 @@
 import SwiftUI
 import ComicReaderCore
+import UIKit
 
 // MARK: - 翻页视图：单页 / 双页（PagedView.tsx 的移植）
 //

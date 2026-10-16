@@ -1,5 +1,6 @@
 import SwiftUI
 import ComicReaderCore
+import UIKit
 
 // MARK: - 书架卡片（ComicCard.tsx 的移植）
 //

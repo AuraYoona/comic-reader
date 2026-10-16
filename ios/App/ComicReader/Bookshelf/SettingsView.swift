@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import ComicReaderCore
+import UIKit
 
 // MARK: - 设置（SettingsModal.tsx 的移植；桌面专属项按计划隐藏、键保留以兼容备份）
 //

@@ -1,5 +1,6 @@
 import SwiftUI
 import ComicReaderCore
+import UIKit
 
 // MARK: - 连续滚动（条漫）视图（ScrollView.tsx 的移植）
 //
