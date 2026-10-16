@@ -15,6 +15,9 @@
 
 </div>
 
+> 📱 **iOS 版（开发中）**：SwiftUI 原生移植位于 [`ios/`](ios/)，数据与备份格式和桌面版互通；
+> 构建（无需 Mac，走 GitHub Actions）与侧载方式见 [ios/README.md](ios/README.md)。
+
 ---
 
 ## ✨ 特性一览

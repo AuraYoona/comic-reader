@@ -17,7 +17,10 @@ targets:
     type: application
     platform: iOS
     sources:
-      - ComicReader
+      - path: ComicReader
+        # Info.plist 走 INFOPLIST_FILE，不能再作为资源拷贝（否则 Multiple commands produce）
+        excludes:
+          - Info.plist
     dependencies:
       - package: ComicReaderCore
         product: ComicReaderCore
