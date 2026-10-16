@@ -99,7 +99,9 @@ struct ReaderView: View {
     }
 
     /// 亮度遮罩：只压暗页面（1.2 → 白色提亮；工具条不受影响）
-    private var brightnessOverlay: View {
+    /// 注意：这里必须是 some View（具体类型）——写成协议存在类型 View
+    /// 无法在 ZStack 的 ViewBuilder 里作为子视图使用
+    private var brightnessOverlay: some View {
         let brightness = settings.settings.brightness
         return ZStack {
             if brightness < 1 {
