@@ -124,7 +124,7 @@ struct SettingsView: View {
                 Slider(
                     value: Binding(
                         get: { settings.settings.brightness },
-                        set: { settings.update { s in s.brightness = $0 } }
+                        set: { v in settings.update { s in s.brightness = v } }
                     ),
                     in: BrightnessLimits.min...BrightnessLimits.max,
                     step: 0.05
