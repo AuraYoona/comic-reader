@@ -120,7 +120,7 @@ struct CategoryManagerSheet: View {
     }
 
     @ViewBuilder
-    private func row(for category: Category) -> some View {
+    private func row(for category: ComicCategory) -> some View {
         if editingId == category.id {
             editRow(for: category)
         } else if confirmingDeleteId == category.id {
@@ -163,7 +163,7 @@ struct CategoryManagerSheet: View {
         }
     }
 
-    private func editRow(for category: Category) -> some View {
+    private func editRow(for category: ComicCategory) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             TextField("名称", text: $editName)
             HStack(spacing: 8) {
@@ -206,7 +206,7 @@ struct CategoryManagerSheet: View {
         newName = ""
     }
 
-    private func beginEdit(_ category: Category) {
+    private func beginEdit(_ category: ComicCategory) {
         editingId = category.id
         editName = category.name
         editColor = category.color

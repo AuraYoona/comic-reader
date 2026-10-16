@@ -15,7 +15,7 @@ import ComicReaderCore
 //   - 裁白边采样：96px 降采样 → computeCropInsets；缓存 400 条（对齐 autoCrop.ts MAX_CACHE）
 
 @MainActor
-final class PageProvider {
+final class PageProvider: ObservableObject {
     /// 预取缓存张数（对齐桌面版 pageCache.ts MAX_ENTRIES = 32）
     static let pageCacheCount = 32
     /// 页缩略图缓存字节预算（对齐 protocol.ts THUMB_CACHE_MAX_BYTES = 24 MiB）

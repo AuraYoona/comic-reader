@@ -119,9 +119,9 @@ func sanitizeComics(_ raw: Any?) -> [Comic] {
 }
 
 /// 过滤非法分类记录：id/name 必须是字符串且 name 去空白后非空，按 id 去重
-func sanitizeCategories(_ raw: Any?, now: Double = 0) -> [Category] {
+func sanitizeCategories(_ raw: Any?, now: Double = 0) -> [ComicCategory] {
     guard let arr = raw as? [Any] else { return [] }
-    var out: [Category] = []
+    var out: [ComicCategory] = []
     var seen = Set<String>()
     for item in arr {
         guard let r = item as? [String: Any],
@@ -138,7 +138,7 @@ func sanitizeCategories(_ raw: Any?, now: Double = 0) -> [Category] {
             color = Limits.categoryColors[out.count % Limits.categoryColors.count]
         }
         let createdAt = (r["createdAt"] as? Double) ?? now
-        out.append(Category(id: id, name: name, color: color, createdAt: createdAt))
+        out.append(ComicCategory(id: id, name: name, color: color, createdAt: createdAt))
     }
     return out
 }

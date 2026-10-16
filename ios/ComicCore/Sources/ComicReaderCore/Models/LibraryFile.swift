@@ -10,13 +10,13 @@ public struct LibraryFile: Codable, Equatable, Sendable {
     public var version: Int
     public var settings: AppSettings
     public var comics: [Comic]
-    public var categories: [Category]
+    public var categories: [ComicCategory]
 
     public init(
         version: Int = CURRENT_SCHEMA_VERSION,
         settings: AppSettings = .defaults,
         comics: [Comic] = [],
-        categories: [Category] = []
+        categories: [ComicCategory] = []
     ) {
         self.version = version
         self.settings = settings
@@ -29,6 +29,6 @@ public struct LibraryFile: Codable, Equatable, Sendable {
         version = try c.decodeIfPresent(Int.self, forKey: .version) ?? CURRENT_SCHEMA_VERSION
         settings = try c.decodeIfPresent(AppSettings.self, forKey: .settings) ?? .defaults
         comics = try c.decodeIfPresent([Comic].self, forKey: .comics) ?? []
-        categories = try c.decodeIfPresent([Category].self, forKey: .categories) ?? []
+        categories = try c.decodeIfPresent([ComicCategory].self, forKey: .categories) ?? []
     }
 }

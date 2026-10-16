@@ -10,7 +10,7 @@ import ComicReaderCore
 // iOS 上 ImageIO 全能解码，单阶段生成，无需桌面版的「原图直存 + 渲染进程重压」两段式。
 
 @MainActor
-final class CoverStore {
+final class CoverStore: ObservableObject {
     private let coversDir: String
     /// 已解码封面（按文件名缓存；封面重生成换新文件名，天然失效）
     private let cache = NSCache<NSString, UIImage>()

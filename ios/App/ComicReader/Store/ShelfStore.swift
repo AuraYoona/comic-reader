@@ -33,7 +33,7 @@ final class ShelfStore: ObservableObject {
     /// 批量操作进行中（重扫等；禁用相关按钮）
     @Published private(set) var busy = false
     @Published private(set) var missingIds: Set<String> = []
-    @Published private(set) var categories: [Category] = []
+    @Published private(set) var categories: [ComicCategory] = []
 
     /// 搜索输入（立即回显）；实际筛选用的 query 有 150ms 防抖
     @Published var searchText = "" {
@@ -321,7 +321,7 @@ final class ShelfStore: ObservableObject {
 
     // MARK: 分类
 
-    func createCategory(name: String) -> Category? {
+    func createCategory(name: String) -> ComicCategory? {
         let trimmed = String(name.trimmingCharacters(in: .whitespaces).prefix(Limits.categoryNameMax))
         guard !trimmed.isEmpty else { return nil }
         guard !categories.contains(where: { $0.name == trimmed }) else {

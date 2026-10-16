@@ -273,16 +273,16 @@ public final class LibraryDatabase: @unchecked Sendable {
 
     // MARK: 分类
 
-    public func listCategories() -> [Category] {
+    public func listCategories() -> [ComicCategory] {
         lock.lock(); defer { lock.unlock() }
         return data.categories
     }
 
     @discardableResult
-    public func createCategory(name: String, color: String? = nil) -> Category {
+    public func createCategory(name: String, color: String? = nil) -> ComicCategory {
         lock.lock(); defer { lock.unlock() }
         let fallback = Limits.categoryColors[data.categories.count % Limits.categoryColors.count]
-        let category = Category(
+        let category = ComicCategory(
             id: UUID().uuidString.lowercased(),
             name: name.trimmingCharacters(in: .whitespaces),
             color: (color.flatMap { isValidHexColor($0) ? $0 : nil }) ?? fallback,
@@ -294,7 +294,7 @@ public final class LibraryDatabase: @unchecked Sendable {
     }
 
     @discardableResult
-    public func updateCategory(id: String, patch: CategoryPatch) -> Category? {
+    public func updateCategory(id: String, patch: CategoryPatch) -> ComicCategory? {
         lock.lock(); defer { lock.unlock() }
         guard let idx = data.categories.firstIndex(where: { $0.id == id }) else { return nil }
         if let name = patch.name {

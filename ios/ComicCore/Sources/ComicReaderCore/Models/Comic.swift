@@ -124,7 +124,7 @@ public struct Comic: Codable, Equatable, Identifiable, Sendable {
 }
 
 /// 自定义分类（v3 新增，属于「自定义分类」扩展功能）
-public struct Category: Codable, Equatable, Identifiable, Sendable {
+public struct ComicCategory: Codable, Equatable, Identifiable, Sendable {
     public var id: String
     public var name: String
     /// 预设调色板中的颜色，形如 #rrggbb
@@ -143,10 +143,10 @@ public struct Category: Codable, Equatable, Identifiable, Sendable {
 
 public struct CategoryMutationResult: Sendable {
     public var ok: Bool
-    public var category: Category?
+    public var category: ComicCategory?
     public var error: String?
 
-    public init(ok: Bool, category: Category? = nil, error: String? = nil) {
+    public init(ok: Bool, category: ComicCategory? = nil, error: String? = nil) {
         self.ok = ok
         self.category = category
         self.error = error

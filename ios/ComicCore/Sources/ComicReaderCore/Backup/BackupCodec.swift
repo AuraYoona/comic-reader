@@ -125,7 +125,7 @@ public enum BackupCodec {
         _ data: LibraryFile, coversFrom: String, db: LibraryDatabase, coversDir: String
     ) throws -> RestoreResult {
         var categoryIdMap: [String: String] = [:]
-        var localByName: [String: Category] = [:]
+        var localByName: [String: ComicCategory] = [:]
         for category in db.listCategories() {
             localByName[category.name] = category
         }
