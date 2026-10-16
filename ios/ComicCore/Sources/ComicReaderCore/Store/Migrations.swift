@@ -59,12 +59,14 @@ let MIGRATIONS: [Int: (JSONDict) -> JSONDict] = [
     3: { data in
         var d = data
         var settings = d["settings"] as? JSONDict ?? [:]
-        // v4 新增的设置默认值（老数据已有同名键时不动）
+        // v4 新增的设置默认值（老数据已有同名键时不动）。
+        // 数值一律用 NSNumber：迁移操作的是「动态 JSON 字典」，只有 NSNumber
+        // 才能同时通过 as? Int 与 as? Double 的桥接（与 JSONSerialization 产物一致）
         let defaults: JSONDict = [
             "doubleCoverSingle": true,
             "widePageSpread": true,
-            "brightness": 1,
-            "autoTurnSeconds": 6,
+            "brightness": NSNumber(value: 1.0),
+            "autoTurnSeconds": NSNumber(value: 6),
             "mouseSideButtons": true,
             "autoCrop": false,
             "libraryRoots": [],
@@ -92,7 +94,7 @@ let MIGRATIONS: [Int: (JSONDict) -> JSONDict] = [
     4: { data in
         var d = data
         var settings = d["settings"] as? JSONDict ?? [:]
-        if settings["autoScrollSpeed"] == nil { settings["autoScrollSpeed"] = 80 }
+        if settings["autoScrollSpeed"] == nil { settings["autoScrollSpeed"] = NSNumber(value: 80.0) }
         d["settings"] = settings
         let comics = d["comics"] as? [Any] ?? []
         d["comics"] = comics

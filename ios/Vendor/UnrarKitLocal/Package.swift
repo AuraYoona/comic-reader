@@ -69,5 +69,7 @@ let package = Package(
             ]
         )
     ],
-    cxxLanguageStandard: .cxx11
+    // unrar 6.12 的 makefile 不指定语言标准（跟随编译器默认，现代 clang 为 gnu++14+），
+    // 强制 c++11 有踩到 C++14 特性的风险，这里给到 c++14
+    cxxLanguageStandard: .cxx14
 )

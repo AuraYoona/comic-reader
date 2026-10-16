@@ -38,8 +38,8 @@ final class NaturalSortTests: XCTestCase {
     }
 
     func testStabilityOnEqualKeys() {
-        // 相等元素保持原顺序
+        // 相等键保持原顺序：x.jpg 与 X.jpg 比较相等，按原序 x 在前
         let sorted = naturalSort(["x.jpg", "X.jpg", "a.jpg"])
-        XCTAssertEqual(sorted.first, "x.jpg") // x 在 X 前面（稳定）
+        XCTAssertEqual(sorted, ["a.jpg", "x.jpg", "X.jpg"])
     }
 }
