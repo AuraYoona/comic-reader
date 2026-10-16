@@ -172,12 +172,17 @@ struct ScrollReaderView: View {
         return min(max(0, y), maxOffset)
     }
 
-    /// 找到承载阅读内容的 UIScrollView（SwiftUI ScrollView 的宿主）
+    /// 找到承载阅读内容的 UIScrollView（SwiftUI ScrollView 的宿主）。
+    /// 只认「纵向可滚动」的：缩略图条等横向滚动视图会被排除，
+    /// 避免把所有滚动命令打到错误的视图上。
     private static func findScrollView() -> UIScrollView? {
         guard let window = UIApplication.shared.connectedScenes
             .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return nil }
         func find(_ view: UIView) -> UIScrollView? {
-            if let scroll = view as? UIScrollView { return scroll }
+            if let scroll = view as? UIScrollView,
+               scroll.contentSize.height > scroll.bounds.height + 1 {
+                return scroll
+            }
             for sub in view.subviews {
                 if let found = find(sub) { return found }
             }
