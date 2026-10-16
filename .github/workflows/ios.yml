@@ -34,7 +34,8 @@ jobs:
       - name: Run core package tests
         run: |
           set -o pipefail
-          swift test --package-path ios/ComicCore 2>&1 | tee core-test.log
+          # -v：链接命令行进入日志，链接期问题可凭日志直接定位是哪些目标文件在链上
+          swift test --package-path ios/ComicCore -v 2>&1 | tee core-test.log
 
       # 失败时把错误摘到注解里（无需 admin 权限也能在 API/网页上直接看到原因）。
       # 链接器错误的关键行（duplicate symbol / Undefined symbols / ld:）没有
@@ -42,8 +43,15 @@ jobs:
       - name: Report core test failure
         if: failure()
         run: |
-          SUMMARY=$(grep -E 'error:|duplicate symbol|Undefined symbols|ld: |fatal error' core-test.log | head -20 | cut -c1-400 | tr '\n' '§')
+          SUMMARY=$(grep -nE 'error:|duplicate symbol|Undefined symbols|ld: |URKArchive\.mm\.o' core-test.log | head -30 | cut -c1-400 | tr '\n' '§')
           echo "::error title=Swift test failed::${SUMMARY:-unknown, see log}"
+          # 未定义符号错误前后的原始窗口（决定性上下文）
+          LINE=$(grep -n 'Undefined symbols' core-test.log | head -1 | cut -d: -f1)
+          if [ -n "$LINE" ]; then
+            FROM=$((LINE > 3 ? LINE - 3 : 1))
+            WINDOW=$(sed -n "${FROM},$((FROM + 40))p" core-test.log | cut -c1-300 | tr '\n' '§')
+            echo "::error title=Undefined symbols context::${WINDOW}"
+          fi
 
   build-ipa:
     name: Build unsigned IPA
