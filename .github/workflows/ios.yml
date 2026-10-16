@@ -36,11 +36,13 @@ jobs:
           set -o pipefail
           swift test --package-path ios/ComicCore 2>&1 | tee core-test.log
 
-      # 失败时把错误摘到注解里（无需 admin 权限也能在 API/网页上直接看到原因）
+      # 失败时把错误摘到注解里（无需 admin 权限也能在 API/网页上直接看到原因）。
+      # 链接器错误的关键行（duplicate symbol / Undefined symbols / ld:）没有
+      # "error:" 前缀，必须一并抓取，否则只能对着截断信息瞎猜。
       - name: Report core test failure
         if: failure()
         run: |
-          SUMMARY=$(grep -E 'error:' core-test.log | head -5 | tr '\n' '§')
+          SUMMARY=$(grep -E 'error:|duplicate symbol|Undefined symbols|ld: |fatal error' core-test.log | head -20 | cut -c1-400 | tr '\n' '§')
           echo "::error title=Swift test failed::${SUMMARY:-unknown, see log}"
 
   build-ipa:

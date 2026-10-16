@@ -1,13 +1,18 @@
 // swift-tools-version:5.3
-// vendored UnrarKit：官方 UnRAR 6.12 源码（RAR4 + RAR5 完整支持）
-// SPM 清单结构参照社区验证过的 ZHK1024/UnrarKit-Swift-Package，并按 SwiftPM
-// 的头文件布局规则调整：
-//   - publicHeadersPath（Classes/）必须只含头文件，不能有子目录 ——
-//     类别包装（NSString+UnrarKit）因此移到包根的 Categories/
-//   - 消费方 import 的是目标模块名 `UnrarKit`（product 名 UnrarKitLocal）
+// vendored UnrarKit：官方 UnRAR 6.12 源码（RAR4 + RAR5 完整支持）。
 //
-// 不用 unsafeFlags（-Wno-everything）：SwiftPM 对依赖包的 unsafe build flags
-// 有限制会让 swift test 失败；unrar 源码的告警不致命，容忍即可。
+// 单一 target 设计（对 ZHK1024 版本做了合并）：
+//   - 四个源文件全部编译进 UnrarKit 一个归档：URKArchive.mm（ObjC++ 包装）、
+//     URKFileInfo.m、NSString+UnrarKit.mm（类别，URKFileInfo 运行时依赖）、
+//     unrar/dll.cpp。多 target 曾在 CI 触发 repeated ObjC 符号链接错误，
+//     合并后链接面上只有一个归档，机制上消除该类问题。
+//   - publicHeadersPath（Classes/）只允许平铺头文件：raros.hpp 与 dll.hpp
+//     是从 Libraries/unrar/ 镜像进来的（公共头依赖它们，而 SPM 不会把
+//     unrar 的 include 目录暴露给 clang 模块构建）。
+//   - 不用 unsafeFlags：SwiftPM 对依赖包的 unsafe build flags 有限制。
+//
+// 消费方 import 的模块名是 `UnrarKit`（product 名 UnrarKitLocal）。
+// 注意：App 链接需要 -ObjC（ObjC 类别在静态归档中默认会被裁掉）。
 
 import PackageDescription
 
@@ -20,7 +25,7 @@ let package = Package(
     products: [
         .library(
             name: "UnrarKitLocal",
-            targets: ["UnrarKit", "UnrarKitCategories"]
+            targets: ["UnrarKit"]
         ),
     ],
     targets: [
@@ -28,19 +33,18 @@ let package = Package(
             name: "UnrarKit",
             path: ".",
             exclude: [
-                "Categories",
                 "LICENSE"
             ],
             sources: [
                 "Classes/URKArchive.mm",
                 "Classes/URKFileInfo.m",
+                "Classes/NSString+UnrarKit.mm",
                 "Libraries/unrar/dll.cpp"
             ],
             publicHeadersPath: "Classes",
             cxxSettings: [
                 .headerSearchPath("Libraries/unrar"),
                 .headerSearchPath("Classes"),
-                .headerSearchPath("Categories"),
                 .define("RARDLL"),
                 .define("UNRAR"),
                 .define("_UNIX"),
@@ -49,23 +53,6 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedLibrary("z")
-            ]
-        ),
-        .target(
-            name: "UnrarKitCategories",
-            dependencies: ["UnrarKit"],
-            path: "Categories",
-            sources: [
-                "NSString+UnrarKit.mm"
-            ],
-            cxxSettings: [
-                .headerSearchPath("../Libraries/unrar"),
-                .headerSearchPath("../Classes"),
-                .define("RARDLL"),
-                .define("UNRAR"),
-                .define("_UNIX"),
-                .define("_FILE_OFFSET_BITS", to: "64"),
-                .define("LARGEFILE_SOURCE")
             ]
         )
     ],
