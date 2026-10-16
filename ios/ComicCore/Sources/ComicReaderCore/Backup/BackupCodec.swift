@@ -244,7 +244,11 @@ public enum BackupCodec {
 
         let archive = try Archive(url: tmpURL, accessMode: .create)
         let fm = FileManager.default
-        let root = URL(fileURLWithPath: dir)
+        // macOS 上 /var 是 /private/var 的符号链接：枚举器返回真实路径，
+        // 直接做字符串前缀替换会得到绝对路径（zip 条目非法）——两边都解析符号链接，
+        // 再按 pathComponents 计算相对路径
+        let root = URL(fileURLWithPath: dir).resolvingSymlinksInPath()
+        let rootComponents = root.pathComponents
         guard let enumerator = fm.enumerator(
             at: root, includingPropertiesForKeys: [.isDirectoryKey], options: []
         ) else {
@@ -254,7 +258,9 @@ public enum BackupCodec {
         for case let fileURL as URL in enumerator {
             let values = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
             guard values.isDirectory != true else { continue }
-            let rel = fileURL.path.replacingOccurrences(of: root.path + "/", with: "")
+            let components = fileURL.resolvingSymlinksInPath().pathComponents
+            guard components.count > rootComponents.count else { continue }
+            let rel = components.dropFirst(rootComponents.count).joined(separator: "/")
             try archive.addEntry(
                 with: rel, fileURL: fileURL, compressionMethod: .deflate
             )

@@ -11,7 +11,8 @@ final class HandleCacheTests: XCTestCase {
         private(set) var closed: [String] = []
 
         func onOpen(_ key: String) -> String { lock.lock(); opened.append(key); lock.unlock(); return "handle(\(key))" }
-        func onClose(_ value: String) { lock.lock(); closed.append(String(value.dropFirst(8).dropLast(1))); lock.unlock() }
+        // "handle(" 是 7 个字符（原实现 dropFirst(8) off-by-one，单字母 key 会被切坏）
+        func onClose(_ value: String) { lock.lock(); closed.append(String(value.dropFirst(7).dropLast(1))); lock.unlock() }
     }
 
     private func makeCache(recorder: Recorder, max: Int = 2, idle: Double = 3600) -> HandleCache<String> {

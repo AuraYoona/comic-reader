@@ -64,20 +64,23 @@ public final class HandleCache<T>: @unchecked Sendable {
     }
 
     public func acquire(_ key: String) async throws -> T {
-        // 快路径：已缓存
         var hit: T?
+        var task: Task<T, Error>?
+
+        // 缓存命中与「注册打开任务」必须在同一个临界区里完成判断：
+        // 否则存在竞态——快路径未命中 → 另一个任务打开完成并写入缓存 →
+        // 这里再度注册新任务，同一文件被打开两次（并发合并失效）
         queue.sync {
             if var entry = entries[key] {
                 touch(key, &entry)
                 entries[key] = entry
                 hit = entry.value
+                return
             }
-        }
-        if let hit { return hit }
-
-        // 注册打开任务：谁先注册谁执行，后来的等待同一个任务
-        let task: Task<T, Error> = queue.sync { () -> Task<T, Error> in
-            if let inflight = pending[key] { return inflight }
+            if let inflight = pending[key] {
+                task = inflight
+                return
+            }
             let newTask = Task<T, Error> { [weak self] in
                 guard let self else { throw SourceError("handle cache released") }
                 do {
@@ -93,8 +96,11 @@ public final class HandleCache<T>: @unchecked Sendable {
                 }
             }
             pending[key] = newTask
-            return newTask
+            task = newTask
         }
+
+        if let hit { return hit }
+        guard let task else { throw SourceError("handle cache released") }
         return try await task.value
     }
 

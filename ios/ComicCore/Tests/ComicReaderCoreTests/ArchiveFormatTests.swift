@@ -29,7 +29,8 @@ final class ArchiveFormatTests: XCTestCase {
     }
 
     func testAllFiveExtensionsPresent() {
-        XCTAssertEqual(ARCHIVE_EXTS.sorted(), ["cbz", "cbr", "pdf", "rar", "zip"])
+        // 字典序：cbr < cbz（r < z）
+        XCTAssertEqual(ARCHIVE_EXTS.sorted(), ["cbr", "cbz", "pdf", "rar", "zip"])
     }
 
     // MARK: stripArchiveExt
@@ -124,7 +125,7 @@ final class ArchiveFormatTests: XCTestCase {
     func testClampBrightness() {
         XCTAssertEqual(BrightnessLimits.clamp(0.1), 0.3)
         XCTAssertEqual(BrightnessLimits.clamp(1.5), 1.2)
-        XCTAssertEqual(BrightnessLimits.clamp(0.626), 0.63) // 0.05 步进
+        XCTAssertEqual(BrightnessLimits.clamp(0.626), 0.65) // 0.05 步进取最近（12.52 → 13）
         XCTAssertEqual(BrightnessLimits.clamp(1), 1)
     }
 
