@@ -69,7 +69,9 @@ final class ReaderStore: ObservableObject {
             error = e.message
             return
         } catch {
-            error = "打开失败，文件可能已损坏"
+            // 注意：裸 catch 会隐式绑定名为 error 的局部常量，遮蔽同名属性；
+            // 必须用 self. 前缀才能写到属性上
+            self.error = "打开失败，文件可能已损坏"
             return
         }
         guard !list.isEmpty else {
