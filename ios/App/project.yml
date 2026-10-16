@@ -1,0 +1,46 @@
+# XcodeGen 规格：CI（macOS runner）用 `xcodegen generate` 生成 Xcode 工程。
+# 无 Mac 开发环境：工程文件不提交，project.yml 是唯一事实来源。
+
+name: ComicReader
+options:
+  bundleIdPrefix: com.aurayoona
+  deploymentTarget:
+    iOS: '16.0'
+  createIntermediateGroups: true
+
+packages:
+  ComicReaderCore:
+    path: ../ComicCore
+
+targets:
+  ComicReader:
+    type: application
+    platform: iOS
+    sources:
+      - ComicReader
+    dependencies:
+      - package: ComicReaderCore
+        product: ComicReaderCore
+    settings:
+      base:
+        INFOPLIST_FILE: ComicReader/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.aurayoona.comicreader.ios
+        PRODUCT_NAME: ComicReader
+        MARKETING_VERSION: '0.7.0'
+        CURRENT_PROJECT_VERSION: '1'
+        SWIFT_VERSION: '5.0'
+        TARGETED_DEVICE_FAMILY: '1,2'
+        SUPPORTS_MACCATALYST: NO
+        CODE_SIGN_STYLE: Manual
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+schemes:
+  ComicReader:
+    build:
+      targets:
+        ComicReader: all
+    run:
+      config: Debug
+    archive:
+      config: Release

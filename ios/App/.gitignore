@@ -1,0 +1,4 @@
+# XcodeGen 生成的工程与构建产物（CI 上生成；工程文件不入库）
+*.xcodeproj/
+build/
+xcuserdata/

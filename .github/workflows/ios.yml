@@ -11,17 +11,17 @@ on:
   push:
     branches: [main]
     paths:
-      - "ios/**"
-      - "scripts/**"
-      - ".github/workflows/ios.yml"
+      - 'ios/**'
+      - 'scripts/**'
+      - '.github/workflows/ios.yml'
     # 标签推送（路径过滤对 tag 不生效）：与桌面版 release.yml 同一批 v* 标签
     tags:
-      - "v*"
+      - 'v*'
   pull_request:
     paths:
-      - "ios/**"
-      - "scripts/**"
-      - ".github/workflows/ios.yml"
+      - 'ios/**'
+      - 'scripts/**'
+      - '.github/workflows/ios.yml'
   workflow_dispatch:
 
 jobs:
@@ -32,7 +32,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run core package tests
-        run: swift test --package-path ios/ComicCore
+        run: |
+          set -o pipefail
+          swift test --package-path ios/ComicCore 2>&1 | tee core-test.log
+
+      # 失败时把错误摘到注解里（无需 admin 权限也能在 API/网页上直接看到原因）
+      - name: Report core test failure
+        if: failure()
+        run: |
+          SUMMARY=$(grep -E 'error:' core-test.log | head -5 | tr '\n' '§')
+          echo "::error title=Swift test failed::${SUMMARY:-unknown, see log}"
 
   build-ipa:
     name: Build unsigned IPA
@@ -49,12 +58,20 @@ jobs:
 
       - name: Archive (unsigned)
         run: |
+          set -o pipefail
           xcodebuild archive \
             -project ios/App/ComicReader.xcodeproj \
             -scheme ComicReader \
             -destination 'generic/platform=iOS' \
             -archivePath build/ComicReader.xcarchive \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee xcodebuild.log
+
+      - name: Report build failure
+        if: failure()
+        run: |
+          SUMMARY=$(grep -E 'error:' xcodebuild.log | head -5 | tr '\n' '§')
+          echo "::error title=xcodebuild failed::${SUMMARY:-unknown, see log}"
 
       - name: Assemble IPA
         run: |
