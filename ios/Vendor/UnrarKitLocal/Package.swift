@@ -1,13 +1,13 @@
 // swift-tools-version:5.3
 // vendored UnrarKit：官方 UnRAR 6.12 源码（RAR4 + RAR5 完整支持）
-// SPM 清单结构参照社区验证过的 ZHK1024/UnrarKit-Swift-Package。
-//
-// 布局说明：
-//   - UnrarKit 目标：URKArchive（ObjC++ 包装）+ URKFileInfo + unrar/dll.cpp
-//     公共头文件 = Classes/（URKArchive.h / URKFileInfo.h / UnrarKitMacros.h）
-//   - UnrarKitCategories 目标：NSString+UnrarKit 类别（URKArchive.mm 会调用它，
-//     必须一起编译，否则运行时 unrecognized selector）
+// SPM 清单结构参照社区验证过的 ZHK1024/UnrarKit-Swift-Package，并按 SwiftPM
+// 的头文件布局规则调整：
+//   - publicHeadersPath（Classes/）必须只含头文件，不能有子目录 ——
+//     类别包装（NSString+UnrarKit）因此移到包根的 Categories/
 //   - 消费方 import 的是目标模块名 `UnrarKit`（product 名 UnrarKitLocal）
+//
+// 不用 unsafeFlags（-Wno-everything）：SwiftPM 对依赖包的 unsafe build flags
+// 有限制会让 swift test 失败；unrar 源码的告警不致命，容忍即可。
 
 import PackageDescription
 
@@ -28,7 +28,7 @@ let package = Package(
             name: "UnrarKit",
             path: ".",
             exclude: [
-                "Classes/Categories",
+                "Categories",
                 "LICENSE"
             ],
             sources: [
@@ -37,13 +37,10 @@ let package = Package(
                 "Libraries/unrar/dll.cpp"
             ],
             publicHeadersPath: "Classes",
-            // 注意：不用 unsafeFlags（-Wno-everything）——SwiftPM 对依赖包的
-            // unsafe build flags 有限制，会直接让 swift test 失败。
-            // unrar 源码的告警不致命，容忍即可。
             cxxSettings: [
                 .headerSearchPath("Libraries/unrar"),
                 .headerSearchPath("Classes"),
-                .headerSearchPath("Classes/Categories"),
+                .headerSearchPath("Categories"),
                 .define("RARDLL"),
                 .define("UNRAR"),
                 .define("_UNIX"),
@@ -57,13 +54,13 @@ let package = Package(
         .target(
             name: "UnrarKitCategories",
             dependencies: ["UnrarKit"],
-            path: "Classes/Categories",
+            path: "Categories",
             sources: [
                 "NSString+UnrarKit.mm"
             ],
             cxxSettings: [
-                .headerSearchPath("../../Libraries/unrar"),
-                .headerSearchPath(".."),
+                .headerSearchPath("../Libraries/unrar"),
+                .headerSearchPath("../Classes"),
                 .define("RARDLL"),
                 .define("UNRAR"),
                 .define("_UNIX"),

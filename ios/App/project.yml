@@ -37,6 +37,9 @@ targets:
         SUPPORTS_MACCATALYST: NO
         CODE_SIGN_STYLE: Manual
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # UnrarKit 的 ObjC 类别（NSString+UnrarKit）在静态归档里会被裁掉，
+        # 运行时 URKFileInfo 会因 unrecognized selector 崩溃；-ObjC 强制加载类别
+        OTHER_LDFLAGS: $(inherited) -ObjC
 
 schemes:
   ComicReader:

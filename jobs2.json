@@ -1,0 +1,139 @@
+{
+  "total_count": 3,
+  "jobs": [
+    {
+      "id": 116809128644,
+      "run_id": 38850075682,
+      "workflow_name": "iOS",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/AuraYoona/comic-reader/actions/runs/38850075682",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTW6MWs8AAAAbMl3axA",
+      "head_sha": "72b05861376b9e0f5058b8f544c0f512d10c11b6",
+      "url": "https://api.github.com/repos/AuraYoona/comic-reader/actions/jobs/116809128644",
+      "html_url": "https://github.com/AuraYoona/comic-reader/actions/runs/38850075682/job/116809128644",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-10-16T04:20:04Z",
+      "started_at": "2026-10-16T04:20:12Z",
+      "completed_at": "2026-10-16T04:20:39Z",
+      "name": "ComicReaderCore unit tests",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-16T04:20:13Z",
+          "completed_at": "2026-10-16T04:20:14Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-16T04:20:14Z",
+          "completed_at": "2026-10-16T04:20:15Z"
+        },
+        {
+          "name": "Run core package tests",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 3,
+          "started_at": "2026-10-16T04:20:15Z",
+          "completed_at": "2026-10-16T04:20:35Z"
+        },
+        {
+          "name": "Report core test failure",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-16T04:20:35Z",
+          "completed_at": "2026-10-16T04:20:35Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-16T04:20:35Z",
+          "completed_at": "2026-10-16T04:20:36Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-16T04:20:36Z",
+          "completed_at": "2026-10-16T04:20:36Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/AuraYoona/comic-reader/check-runs/116809128644",
+      "labels": [
+        "macos-15"
+      ],
+      "runner_id": 1000000119,
+      "runner_name": "GitHub Actions 1000000119",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 116809289781,
+      "run_id": 38850075682,
+      "workflow_name": "iOS",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/AuraYoona/comic-reader/actions/runs/38850075682",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTW6MWs8AAAAbMmBQNQ",
+      "head_sha": "72b05861376b9e0f5058b8f544c0f512d10c11b6",
+      "url": "https://api.github.com/repos/AuraYoona/comic-reader/actions/jobs/116809289781",
+      "html_url": "https://github.com/AuraYoona/comic-reader/actions/runs/38850075682/job/116809289781",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-10-16T04:20:39Z",
+      "started_at": "2026-10-16T04:20:39Z",
+      "completed_at": "2026-10-16T04:20:39Z",
+      "name": "Build unsigned IPA",
+      "steps": [
+
+      ],
+      "check_run_url": "https://api.github.com/repos/AuraYoona/comic-reader/check-runs/116809289781",
+      "labels": [
+        "macos-15"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    },
+    {
+      "id": 116809290990,
+      "run_id": 38850075682,
+      "workflow_name": "iOS",
+      "head_branch": "main",
+      "run_url": "https://api.github.com/repos/AuraYoona/comic-reader/actions/runs/38850075682",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOTW6MWs8AAAAbMmBU7g",
+      "head_sha": "72b05861376b9e0f5058b8f544c0f512d10c11b6",
+      "url": "https://api.github.com/repos/AuraYoona/comic-reader/actions/jobs/116809290990",
+      "html_url": "https://github.com/AuraYoona/comic-reader/actions/runs/38850075682/job/116809290990",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-10-16T04:20:39Z",
+      "started_at": "2026-10-16T04:20:39Z",
+      "completed_at": "2026-10-16T04:20:39Z",
+      "name": "Attach IPA to release",
+      "steps": [
+
+      ],
+      "check_run_url": "https://api.github.com/repos/AuraYoona/comic-reader/check-runs/116809290990",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    }
+  ]
+}
