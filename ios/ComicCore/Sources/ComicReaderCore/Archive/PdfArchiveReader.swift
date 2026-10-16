@@ -1,6 +1,8 @@
 import Foundation
 #if canImport(PDFKit)
 import PDFKit
+// CGImageDestination*（PNG 编码）在 ImageIO，PDFKit 不会转出该模块
+import ImageIO
 #endif
 
 // MARK: - PDF 适配器（src/main/archive/pdf.ts 的移植）

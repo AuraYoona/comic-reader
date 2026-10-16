@@ -25,10 +25,13 @@ public final class ZipArchiveReader: ArchiveReader {
         idleSeconds: 60,
         open: { path in
             let url = URL(fileURLWithPath: path)
-            guard let archive = Archive(url: url, accessMode: .read) else {
+            do {
+                // ZIPFoundation 0.9.19+ 的 throwing 初始化器（failable 版本已废弃）
+                let archive = try Archive(url: url, accessMode: .read)
+                return Handle(archive: archive, url: url)
+            } catch {
                 throw SourceError("无法读取压缩包，文件可能已损坏或不是有效的 ZIP/CBZ", path: path)
             }
-            return Handle(archive: archive, url: url)
         },
         close: { _ in }
     ))

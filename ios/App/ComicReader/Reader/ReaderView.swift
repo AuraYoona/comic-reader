@@ -76,6 +76,10 @@ struct ReaderView: View {
         .task(id: autoTurnKey) {
             await runAutoTurn()
         }
+        .onAppear {
+            // 进入阅读器后工具条自动隐藏计时开始（对齐 Reader.tsx 的 poke 节奏）
+            pokeBars()
+        }
         .onDisappear {
             barsTask?.cancel()
         }
@@ -203,5 +207,8 @@ enum ScrollBus {
 }
 
 extension Notification.Name {
+    /// 平滑滚动：dy 像素（滚动视图带浮点累加与到底回执）
     static let readerScrollByPixels = Notification.Name("readerScrollByPixels")
+    /// 按视口比例滚动（自动翻页的「按屏翻」与键盘翻屏共用）
+    static let readerScrollByViewport = Notification.Name("readerScrollByViewport")
 }
