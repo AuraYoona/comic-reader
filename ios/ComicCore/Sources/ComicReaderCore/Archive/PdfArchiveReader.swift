@@ -86,14 +86,33 @@ public final class PdfArchiveReader: ArchiveReader {
         return png
     }
 
-    /// PDFPage → CGImage（2x 缩放，与桌面版 pdfium render 参数对齐）
+    /// PDFPage → CGImage（2x 缩放，与桌面版 pdfium render 参数对齐）。
+    /// 不用 thumbnail(of:for:)：它在 iOS 返回 UIImage、在 macOS 返回 NSImage，
+    /// 取 CGImage 的方式不同；CGContext + page.draw 两端一致且白底可控
+    /// （PDF 的透明区域在暗色阅读背景下会发黑）。
     static func render(page: PDFPage) -> CGImage? {
         let bounds = page.bounds(for: .mediaBox)
-        let width = bounds.width * Self.renderScale
-        let height = bounds.height * Self.renderScale
-        let thumb = page.thumbnail(of: CGSize(width: width, height: height), for: .mediaBox)
-        guard let cg = thumb.cgImage else { return nil }
-        return cg
+        let width = Int(bounds.width * Self.renderScale)
+        let height = Int(bounds.height * Self.renderScale)
+        guard width > 0, height > 0 else { return nil }
+
+        guard let ctx = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
+        ) else { return nil }
+
+        // 白底（与桌面版 pdfium 渲染出的不透明位图一致）
+        ctx.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+
+        ctx.scaleBy(x: Self.renderScale, y: Self.renderScale)
+        page.draw(with: .mediaBox, to: ctx)
+        return ctx.makeImage()
     }
 
     public func release(_ file: String) {

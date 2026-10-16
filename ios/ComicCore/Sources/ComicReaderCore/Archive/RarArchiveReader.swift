@@ -57,7 +57,8 @@ public final class RarArchiveReader: ArchiveReader {
     public func read(_ file: String, entry: String) throws -> Data {
         let handle = try awaitBlocking { try await self.cache.acquire(file) }
         do {
-            return try handle.archive.extractDataFromFile(entry)
+            // ObjC 选择器 extractDataFromFile: 被 Swift 导入为 extractData(fromFile:)
+            return try handle.archive.extractData(fromFile: entry)
         } catch {
             throw Self.translate(error, path: file, entry: entry)
         }
