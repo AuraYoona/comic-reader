@@ -157,7 +157,7 @@ final class PageListCacheStore: @unchecked Sendable {
     }
 }
 
-public nonisolated(unsafe) let sharedPageListCache = PageListCacheStore()
+nonisolated(unsafe) let sharedPageListCache = PageListCacheStore()
 
 public func invalidateComic(_ comicId: String) {
     sharedPageListCache.invalidate(comicId)

@@ -103,7 +103,10 @@ func sanitizeComics(_ raw: Any?) -> [Comic] {
         let data = try? JSONSerialization.data(withJSONObject: c)
         var comic = data.flatMap {
             try? JSONDecoder().decode(Comic.self, from: $0)
-        } ?? Comic(id: id, title: title, sourceType: .archive, sourcePath: sourcePath, addedAt: 0)
+        } ?? Comic(
+            id: id, title: title, sourceType: .archive, sourcePath: sourcePath,
+            pageCount: 0, addedAt: 0
+        )
         comic.id = id
         comic.title = title
         comic.sourcePath = sourcePath

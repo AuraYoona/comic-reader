@@ -95,7 +95,7 @@ public enum BrightnessLimits {
     /// 亮度 clamp 到 [0.3, 1.2]，按 0.05 步进取整
     public static func clamp(_ value: Double) -> Double {
         guard value.isFinite else { return Self.defaultValue }
-        let clamped = min(max(value, min), max)
+        let clamped = Swift.min(Swift.max(value, min), max)
         return (clamped * 20).rounded() / 20
     }
 }
@@ -107,7 +107,7 @@ public enum AutoTurnLimits {
 
     /// 自动翻页间隔 clamp 到 [2, 60] 秒（整数）
     public static func clamp(_ value: Int) -> Int {
-        min(max(value, min), max)
+        Swift.min(Swift.max(value, min), max)
     }
 }
 
@@ -120,7 +120,7 @@ public enum AutoScrollLimits {
     /// 平滑滚动速度 clamp 到 [10, 400] px/s，按 10 取整
     public static func clamp(_ value: Double) -> Double {
         guard value.isFinite else { return Self.defaultSpeed }
-        let clamped = min(max(value, min), max)
+        let clamped = Swift.min(Swift.max(value, min), max)
         return (clamped / step).rounded() * step
     }
 }

@@ -80,21 +80,22 @@ public final class HandleCache<T>: @unchecked Sendable {
             if let inflight = pending[key] { return inflight }
             let newTask = Task<T, Error> { [weak self] in
                 guard let self else { throw SourceError("handle cache released") }
-                let value = try self.options.open(key)
-                // 打开完成后入缓存（打开期间可能已被 release：新句柄天然是最新的，直接入缓存即可）
-                self.insert(key: key, value: value)
-                return value
+                do {
+                    let value = try self.options.open(key)
+                    // 打开完成后入缓存（打开期间可能已被 release：新句柄天然是最新的，直接入缓存即可）
+                    self.insert(key: key, value: value)
+                    return value
+                } catch {
+                    // 失败时在任务内部自清理 pending（对齐桌面版 .catch 里 delete）：
+                    // 否则失败的任务会留在表里被后续调用者观察到
+                    self.queue.sync { self.pending[key] = nil }
+                    throw error
+                }
             }
             pending[key] = newTask
             return newTask
         }
-        do {
-            let value = try await task.value
-            return value
-        } catch {
-            queue.sync { if pending[key] === task { pending[key] = nil } }
-            throw error
-        }
+        return try await task.value
     }
 
     /// 打开完成后把句柄放入缓存；先淘汰超限的最旧条目

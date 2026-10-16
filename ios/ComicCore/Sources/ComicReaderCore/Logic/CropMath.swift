@@ -115,9 +115,9 @@ public func computeCropInsets(data: [UInt8], width: Int, height: Int) -> CropIns
 
     let insets = CropInsets(
         top: Double(top) / Double(height),
+        right: Double(right) / Double(width),
         bottom: Double(bottom) / Double(height),
-        left: Double(left) / Double(width),
-        right: Double(right) / Double(width)
+        left: Double(left) / Double(width)
     )
     // 四边都顶到上限：多半是整页空白或纯色页，裁了没有意义，保持原样更安全
     if top >= maxY && bottom >= maxY && left >= maxX && right >= maxX { return nil }

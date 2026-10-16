@@ -1,8 +1,10 @@
 name: iOS
 
-# iOS 移植的构建与验证链路（无 Mac 开发环境）：
-#   1. macOS runner 上跑 ComicReaderCore 的单元测试（移植逻辑的完整验证）
-#   2. 构建 iOS App 目标（当前阶段：语法 / 类型门禁；后续阶段加上 xcodebuild + IPA）
+# iOS 移植的构建与交付链路（无 Mac 开发环境）：
+#   1. macOS runner 跑 ComicReaderCore 单元测试（移植逻辑的完整验证）
+#   2. XcodeGen 生成 Xcode 工程 → 未签名 archive → 组装 Payload IPA 上传
+#      （用户用 Sideloadly / AltStore 以免费 Apple ID 重签安装）
+#   3. 打 v*-ios 标签时把 IPA 附到 GitHub Release
 # 桌面版的 ci.yml / release.yml 完全不受影响。
 
 on:
@@ -10,10 +12,15 @@ on:
     branches: [main]
     paths:
       - "ios/**"
+      - "scripts/**"
       - ".github/workflows/ios.yml"
+    # 标签推送（路径过滤对 tag 不生效）：与桌面版 release.yml 同一批 v* 标签
+    tags:
+      - "v*"
   pull_request:
     paths:
       - "ios/**"
+      - "scripts/**"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
 
@@ -24,15 +31,68 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
-
       - name: Run core package tests
         run: swift test --package-path ios/ComicCore
 
-      - name: Build core for iOS platform (cross-compile check)
+  build-ipa:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    needs: core-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec ios/App/project.yml --project ios/App
+
+      - name: Archive (unsigned)
         run: |
-          # Core 包按 iOS 目标做一次编译检查（不需要模拟器）
-          xcrun swift build --package-path ios/ComicCore \
-            -Xswiftc -sdk -Xswiftc "$(xcrun --sdk iphonesimulator --show-sdk-path)" \
-            -Xswiftc -target -Xswiftc arm64-apple-ios16.0-simulator
+          xcodebuild archive \
+            -project ios/App/ComicReader.xcodeproj \
+            -scheme ComicReader \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/ComicReader.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Assemble IPA
+        run: |
+          mkdir -p build/Payload
+          cp -R build/ComicReader.xcarchive/Products/Applications/ComicReader.app build/Payload/
+          cd build && zip -qry ComicReader-unsigned.ipa Payload
+          ls -la ComicReader-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ComicReader-unsigned-ipa
+          path: build/ComicReader-unsigned.ipa
+
+  release:
+    name: Attach IPA to release
+    runs-on: ubuntu-latest
+    needs: build-ipa
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ComicReader-unsigned-ipa
+          path: build
+
+      - name: Upload IPA to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # 桌面版 release.yml（electron-builder --publish always）会先建「草稿」Release 再人工发布。
+          # 这里优先复用已存在的 Release（草稿或已发布），不存在时才建草稿——不抢发布权。
+          gh release upload "$TAG" build/ComicReader-unsigned.ipa --clobber 2>/dev/null \
+            || gh release create "$TAG" build/ComicReader-unsigned.ipa \
+                 --draft --title "$TAG" \
+                 --notes "iOS 未签名 IPA：用 Sideloadly / AltStore 以免费 Apple ID 重签安装（7 天需重签）。"

@@ -101,9 +101,9 @@ public final class PdfArchiveReader: ArchiveReader {
         cache.releaseAll()
     }
 }
-#endif
 
 extension CGImage {
+    /// CGImage → PNG 字节（PDF 页渲染产物走统一图片管线）
     func pngData() -> Data? {
         let data = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
@@ -114,3 +114,4 @@ extension CGImage {
         return data as Data
     }
 }
+#endif

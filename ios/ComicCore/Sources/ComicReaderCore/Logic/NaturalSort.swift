@@ -14,9 +14,11 @@ import Foundation
 
 /// 返回 -1 / 0 / 1
 public func naturalCompare(_ a: String, _ b: String) -> Int {
-    let result = (a as NSString).compare(
+    let nsA = a as NSString
+    let result = nsA.compare(
         b,
         options: [.numeric, .caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+        range: NSRange(location: 0, length: nsA.length),
         locale: Locale(identifier: "zh")
     )
     switch result {
