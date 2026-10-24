@@ -58,12 +58,11 @@ final class CoverStore: ObservableObject {
     /// 读取与编码都不在主线程上做（readPage 内部有信号量等待，会卡住 UI）
     @discardableResult
     func regenerateCover(for comic: Comic, db: LibraryDatabase, now: Double) async -> Comic? {
-        guard let jpeg = await Task.detached(priority: .userInitiated)({ () -> Data? in
+        let jpeg = await Task.detached(priority: .userInitiated) { () -> Data? in
             guard let page = try? await readPageAsync(comic, index: 0) else { return nil }
             return ImagePipeline.makeCover(from: page.data)
-        }).value else {
-            return nil
-        }
+        }.value
+        guard let jpeg else { return nil }
         let old = comic.coverFile
         let name = "\(comic.id)-\(Int(now)).jpg"
         guard write(jpeg, name: name) else { return nil }
