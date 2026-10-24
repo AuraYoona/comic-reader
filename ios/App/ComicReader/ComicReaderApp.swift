@@ -19,6 +19,7 @@ struct ComicReaderApp: App {
                 .environmentObject(model.toasts)
                 .environmentObject(model.pages)
                 .environmentObject(model.covers)
+                .environmentObject(model.transfer)
                 .preferredColorScheme(model.settings.preferredScheme)
                 .task { await model.boot() }
                 .onChange(of: scenePhase) { phase in

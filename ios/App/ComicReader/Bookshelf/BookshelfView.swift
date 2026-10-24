@@ -28,7 +28,8 @@ struct BookshelfView: View {
                 onImportFolder: { pickerMode = .folderComic },
                 onImportFiles: { pickerMode = .files },
                 onImportBatch: { pickerMode = .batchRoot },
-                onOpenSettings: { sheet = .settings }
+                onOpenSettings: { sheet = .settings },
+                onLanTransfer: { sheet = .lanTransfer }
             )
             Divider().opacity(0.5)
             content
@@ -299,6 +300,8 @@ struct BookshelfView: View {
         switch sheet {
         case .settings:
             SettingsView()
+        case .lanTransfer:
+            LanTransferView()
         case .rename(let id):
             // 记录已不存在时自动关闭（对齐桌面版「live」解析）
             if shelf.comics.contains(where: { $0.id == id }) {
@@ -321,6 +324,7 @@ struct BookshelfView: View {
 
 enum ShelfSheet: Identifiable {
     case settings
+    case lanTransfer
     case rename(String)
     case assign(String)
     case manager
@@ -328,6 +332,7 @@ enum ShelfSheet: Identifiable {
     var id: String {
         switch self {
         case .settings: return "settings"
+        case .lanTransfer: return "lan-transfer"
         case .rename(let id): return "rename-\(id)"
         case .assign(let id): return "assign-\(id)"
         case .manager: return "manager"

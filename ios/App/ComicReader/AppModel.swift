@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     let reader: ReaderStore
     let toasts: ToastCenter
     let importFlow: ImportFlow
+    let transfer: LanTransferModel
 
     @Published private(set) var booted = false
 
@@ -42,6 +43,12 @@ final class AppModel: ObservableObject {
         let shelf = ShelfStore(db: db, settings: settings, importer: importer, covers: covers, toasts: toasts)
         let reader = ReaderStore(db: db, settings: settings, pages: pages)
         let importFlow = ImportFlow(paths: paths, shelf: shelf, toasts: toasts)
+        let transfer = LanTransferModel(
+            paths: paths,
+            db: db,
+            shelf: shelf,
+            toasts: toasts
+        )
 
         self.paths = paths
         self.db = db
@@ -53,6 +60,7 @@ final class AppModel: ObservableObject {
         self.reader = reader
         self.toasts = toasts
         self.importFlow = importFlow
+        self.transfer = transfer
     }
 
     /// 启动流程（幂等；ContentView 的 .task 调用）
@@ -87,6 +95,8 @@ final class AppModel: ObservableObject {
             db.flushSync()
             closeAllSources()
             pages.clearAll()
+            // iOS 会挂起进程，局域网监听留着也收不到包
+            transfer.handleBackground()
         case .inactive:
             reader.flushPersist()
             db.flushSync()
