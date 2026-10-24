@@ -273,7 +273,6 @@ public enum BackupCodec {
             throw SourceError("目录不可读")
         }
 
-        let method: Archive.Compression = storeOnly ? .none : .deflate
         for case let fileURL as URL in enumerator {
             let values = try fileURL.resourceValues(
                 forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
@@ -283,7 +282,9 @@ public enum BackupCodec {
             let components = fileURL.resolvingSymlinksInPath().pathComponents
             guard components.count > rootComponents.count else { continue }
             let rel = components.dropFirst(rootComponents.count).joined(separator: "/")
-            try archive.addEntry(with: rel, fileURL: fileURL, compressionMethod: method)
+            // 压缩方法由参数类型推导（ZIPFoundation 0.9.19 的类型名是 CompressionMethod，
+            // 不要显式写出，避免与系统 Compression 框架歧义）
+            try archive.addEntry(with: rel, fileURL: fileURL, compressionMethod: storeOnly ? .none : .deflate)
         }
     }
 
