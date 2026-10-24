@@ -55,11 +55,13 @@ public enum HTTPResponseHead {
 
         var hasContentLength = false
         for (name, value) in headers {
-            // header 名与值都不能包含 CR/LF，否则可注入额外的响应头
-            let cleanName = name.filter { $0 != "\r" && $0 != "\n" && $0 != ":" }
+            // header 名与值都不能包含 CR/LF，否则可注入额外的响应头。
+            // 必须按 Unicode 标量过滤：Swift 里 "\r\n" 是单个字位（grapheme），
+            // 按 Character 过滤它既不等于 "\r" 也不等于 "\n"，会原样漏过。
+            let cleanName = String(name.unicodeScalars.filter { $0 != "\r" && $0 != "\n" && $0 != ":" })
             guard !cleanName.isEmpty else { continue }
             if cleanName.lowercased() == "content-length" { hasContentLength = true }
-            let cleanValue = value.filter { $0 != "\r" && $0 != "\n" }
+            let cleanValue = String(value.unicodeScalars.filter { $0 != "\r" && $0 != "\n" })
             lines.append("\(cleanName): \(cleanValue)")
         }
 
