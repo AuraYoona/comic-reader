@@ -36,6 +36,36 @@ final class PageProvider: ObservableObject {
         thumbCache.totalCostLimit = Self.thumbCacheBytes
     }
 
+    /// 解码一页（读取走 readPageAsync 的专用 GCD 队列，不占协作线程；
+    /// 解码本省是 CPU 工作，跑在协作池上是本分）
+    nonisolated private static func decodePage(
+        comic: Comic, index: Int, maxPixelSize: Int
+    ) async -> UIImage? {
+        guard let bytes = try? await readPageAsync(comic, index: index) else { return nil }
+        guard let cg = ImagePipeline.downsample(bytes.data, maxPixelSize: maxPixelSize) else {
+            return nil
+        }
+        return UIImage(cgImage: cg)
+    }
+
+    /// 解码一页缩略图；返回 (图片, JPEG 字节数)——字节数决定是否入缓存
+    nonisolated private static func decodeThumb(
+        comic: Comic, index: Int
+    ) async -> (image: UIImage, jpegBytes: Int)? {
+        guard let bytes = try? await readPageAsync(comic, index: index),
+              let jpeg = ImagePipeline.makePageThumb(from: bytes.data),
+              let image = UIImage(data: jpeg) else { return nil }
+        return (image, jpeg.count)
+    }
+
+    /// 裁白边采样（96px）
+    nonisolated private static func computeCropInsets(
+        comic: Comic, index: Int
+    ) async -> CropInsets? {
+        guard let bytes = try? await readPageAsync(comic, index: index) else { return nil }
+        return ImagePipeline.cropInsets(from: bytes.data)
+    }
+
     // MARK: 页面图
 
     /// 缓存命中直接返回（同步，供首帧无闪）
@@ -50,12 +80,7 @@ final class PageProvider: ObservableObject {
         if let running = inflight[k] { return await running.value }
 
         let task = Task<UIImage?, Never> { [weak self] in
-            let decoded: UIImage? = await Task.detached(priority: .userInitiated) {
-                guard let bytes = try? readPage(comic, index: index),
-                      let cg = ImagePipeline.downsample(bytes.data, maxPixelSize: maxPixelSize)
-                else { return nil }
-                return UIImage(cgImage: cg)
-            }.value
+            let decoded = await Self.decodePage(comic: comic, index: index, maxPixelSize: maxPixelSize)
             if let self, let decoded {
                 self.pageCache.setObject(decoded, forKey: k as NSString)
             }
@@ -75,12 +100,7 @@ final class PageProvider: ObservableObject {
             let k = key(comic, index)
             if pageCache.object(forKey: k as NSString) != nil || inflight[k] != nil { continue }
             let task = Task<UIImage?, Never> { [weak self] in
-                let decoded: UIImage? = await Task.detached(priority: .utility) {
-                    guard let bytes = try? readPage(comic, index: index),
-                          let cg = ImagePipeline.downsample(bytes.data, maxPixelSize: maxPixelSize)
-                    else { return nil }
-                    return UIImage(cgImage: cg)
-                }.value
+                let decoded = await Self.decodePage(comic: comic, index: index, maxPixelSize: maxPixelSize)
                 if let self, let decoded {
                     self.pageCache.setObject(decoded, forKey: k as NSString)
                 }
@@ -99,12 +119,7 @@ final class PageProvider: ObservableObject {
         if let running = inflight["thumb:" + k] { return await running.value }
 
         let task = Task<UIImage?, Never> { [weak self] in
-            let decoded: (image: UIImage, jpegBytes: Int)? = await Task.detached(priority: .utility) {
-                guard let bytes = try? readPage(comic, index: index),
-                      let jpeg = ImagePipeline.makePageThumb(from: bytes.data),
-                      let image = UIImage(data: jpeg) else { return nil }
-                return (image, jpeg.count)
-            }.value
+            let decoded = await Self.decodeThumb(comic: comic, index: index)
             if let self, let decoded {
                 // 超过 512 KiB 的缩略图不缓存（对齐桌面版 protocol.ts）；成本 = 解码后占用
                 if decoded.jpegBytes <= Self.thumbCacheableMaxBytes {
@@ -130,10 +145,7 @@ final class PageProvider: ObservableObject {
     func cropInsets(comic: Comic, index: Int) async -> CropInsets? {
         let k = key(comic, index)
         if let hit = cropCache[k] { return hit }
-        let insets: CropInsets? = await Task.detached(priority: .utility) {
-            guard let bytes = try? readPage(comic, index: index) else { return nil }
-            return ImagePipeline.cropInsets(from: bytes.data)
-        }.value
+        let insets = await Self.computeCropInsets(comic: comic, index: index)
         remember(k, insets)
         return insets
     }

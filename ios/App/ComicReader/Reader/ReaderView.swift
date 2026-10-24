@@ -4,19 +4,23 @@ import ComicReaderCore
 // MARK: - 阅读器顶层（Reader.tsx 的移植）
 //
 // 打开中 / 失败态覆盖层；模式分派（单双页 → PagedView，滚动 → ScrollReaderView）；
-// 自动翻页（定时跳屏或平滑滚动）；工具条自动隐藏（2600ms）；亮度遮罩；
-// 「已是最后一页」提示（2600ms 内再触发一次返回书架）。
+// 自动翻页（定时跳屏或平滑滚动）；工具条自动隐藏（5 秒，交互期间暂停）；
+// 亮度遮罩；「已是最后一页」提示（2600ms 内再触发一次返回书架）。
 
 struct ReaderView: View {
     @EnvironmentObject private var reader: ReaderStore
     @EnvironmentObject private var settings: SettingsStore
 
-    /// 工具条自动隐藏延迟（对齐 Reader.tsx BARS_HIDE_DELAY_MS = 2600）
-    private static let barsHideNs: UInt64 = 2_600_000_000
+    /// 工具条自动隐藏延迟。桌面版 2600ms（Reader.tsx），但桌面有鼠标活动
+    /// 全局 poke；触屏上输入页码 / 拖进度条时 2.6 秒就消失太仓促，放宽到 5 秒，
+    /// 且交互期间（见 pinBars）完全暂停隐藏。
+    private static let barsHideNs: UInt64 = 5_000_000_000
     private static let autoTickNs: UInt64 = 100_000_000
 
     @State private var barsVisible = true
     @State private var barsTask: Task<Void, Never>?
+    /// 交互钉住（输入页码等）：暂停自动隐藏
+    @State private var barsPinned = false
 
     var body: some View {
         ZStack {
@@ -118,12 +122,14 @@ struct ReaderView: View {
     private var bars: some View {
         VStack(spacing: 0) {
             if barsVisible {
-                ReaderTopBar(onBack: { reader.close() })
+                ReaderTopBar(onBack: { reader.close() }, onPin: pinBars)
+                    .simultaneousGesture(DragGesture().onEnded { _ in pokeBars() })
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
             Spacer()
             if barsVisible {
                 ReaderBottomBar()
+                    .simultaneousGesture(DragGesture().onEnded { _ in pokeBars() })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -137,12 +143,26 @@ struct ReaderView: View {
 
     private func pokeBars() {
         barsTask?.cancel()
+        guard !barsPinned else { return }
         barsTask = Task { [self] in
             try? await Task.sleep(nanoseconds: Self.barsHideNs)
             guard !Task.isCancelled else { return }
             await MainActor.run {
+                guard !barsPinned else { return }
                 withAnimation { barsVisible = false }
             }
+        }
+    }
+
+    /// 交互钉住：true = 显示工具条且暂停隐藏（输页码、弹菜单）；
+    /// false = 恢复自动隐藏计时
+    private func pinBars(_ pinned: Bool) {
+        barsPinned = pinned
+        if pinned {
+            barsTask?.cancel()
+            withAnimation { barsVisible = true }
+        } else {
+            pokeBars()
         }
     }
 

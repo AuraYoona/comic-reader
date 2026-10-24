@@ -196,6 +196,23 @@ public func readPage(_ comic: Comic, index: Int) throws -> PageBytes {
     return try readEntry(sourceType: comic.sourceType, sourcePath: comic.sourcePath, entry: pages[index])
 }
 
+/// 阻塞式读取的专用并发队列。ArchiveReader 是同步 API，内部用信号量
+/// （AsyncBridge）等待句柄获取——绝不能在 Swift 协作线程池的线程上跑：
+/// 池宽 ≈ 核数，当前页 + 预取 + 缩略图并发时线程全被信号量占满，
+/// 内部的 Task 永远排不上队，表现为「偶尔有页面加载失败」。
+/// 这里把同步世界挪到 GCD 线程（GCD 会为阻塞工作补线程），调用方挂起等待。
+private let archiveReadQueue = DispatchQueue(
+    label: "com.comicreader.archive.reads", attributes: .concurrent
+)
+
+public func readPageAsync(_ comic: Comic, index: Int) async throws -> PageBytes {
+    try await withCheckedThrowingContinuation { continuation in
+        archiveReadQueue.async {
+            continuation.resume(with: Result { try readPage(comic, index: index) })
+        }
+    }
+}
+
 /// 释放全部打开的压缩包句柄（进入后台时调用，对应桌面版的 before-quit）
 public func closeAllSources() {
     sharedArchiveRegistry.releaseAll()

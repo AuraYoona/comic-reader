@@ -12,6 +12,8 @@ struct ReaderTopBar: View {
     @EnvironmentObject private var settings: SettingsStore
 
     let onBack: () -> Void
+    /// 输入页码聚焦期间钉住工具条（暂停自动隐藏）；失焦恢复
+    let onPin: (Bool) -> Void
 
     @State private var pageDraft = ""
     @FocusState private var jumpFocused: Bool
@@ -83,6 +85,7 @@ struct ReaderTopBar: View {
                     if !jumpFocused { pageDraft = "\(reader.page + 1)" }
                 }
                 .onChange(of: jumpFocused) { focused in
+                    onPin(focused)
                     if !focused { commitJump() }
                 }
                 .onSubmit { commitJump() }

@@ -286,7 +286,7 @@ final class ShelfStore: ObservableObject {
                     throw SourceError("这本漫画里没有页面")
                 }
                 var u = db.setPageCount(id: id, pageCount: list.count) ?? c
-                if let regenerated = covers.regenerateCover(for: u, db: db, now: now()) {
+                if let regenerated = await covers.regenerateCover(for: u, db: db, now: now()) {
                     u = regenerated
                 }
                 updated.append(u)

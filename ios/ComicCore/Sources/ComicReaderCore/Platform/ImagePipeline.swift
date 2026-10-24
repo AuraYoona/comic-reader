@@ -29,12 +29,17 @@ public struct ImagePipeline: Sendable {
 
     // MARK: 封面 / 缩略图
 
-    /// 封面：仅当原图宽 > 480 才缩放；JPEG q0.82；解码失败返回 nil
+    /// 封面：仅当原图宽 > 480 才缩放，再居中裁成 3:4（书架卡片即 3:4；
+    /// 条漫/宽幅首页按宽度等比缩放会得到 480×N 的细长图，卡片里只能看到
+    /// 一小截，解码后一张就要数 MB）；JPEG q0.82；解码失败返回 nil
     public static func makeCover(from data: Data) -> Data? {
-        makeJPEG(from: data, maxWidth: coverWidth, quality: coverJpegQuality)
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        guard let image = scaledImage(from: source, maxWidth: coverWidth) else { return nil }
+        return encodeJPEG(centerCropToCoverAspect(image), quality: coverJpegQuality)
     }
 
-    /// 页缩略图：仅当原图宽 > 180 才缩放；JPEG q0.70
+    /// 页缩略图：仅当原图宽 > 180 才缩放；JPEG q0.70（保持原始比例，
+    /// 缩略图跳页条的槽位自己按 fill 裁）
     public static func makePageThumb(from data: Data) -> Data? {
         makeJPEG(from: data, maxWidth: pageThumbWidth, quality: pageThumbQuality)
     }
@@ -43,7 +48,10 @@ public struct ImagePipeline: Sendable {
     private static func makeJPEG(from data: Data, maxWidth: Int, quality: Double) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         guard let image = scaledImage(from: source, maxWidth: maxWidth) else { return nil }
+        return encodeJPEG(image, quality: quality)
+    }
 
+    private static func encodeJPEG(_ image: CGImage, quality: Double) -> Data? {
         let out = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
             out, UTType.jpeg.identifier as CFString, 1, nil
@@ -54,6 +62,21 @@ public struct ImagePipeline: Sendable {
         CGImageDestinationAddImage(dest, image, options as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return out as Data
+    }
+
+    /// 居中裁成 3:4；比例已在范围内或裁剪失败时原样返回
+    private static func centerCropToCoverAspect(_ image: CGImage) -> CGImage {
+        let w = image.width
+        let h = image.height
+        guard w > 0, h > 0 else { return image }
+        let targetW = min(w, h * 3 / 4)
+        let targetH = min(h, w * 4 / 3)
+        if targetW >= w, targetH >= h { return image }
+        let rect = CGRect(
+            x: (w - targetW) / 2, y: (h - targetH) / 2,
+            width: targetW, height: targetH
+        )
+        return image.cropping(to: rect) ?? image
     }
 
     /// 取原图；宽超过 maxWidth 时按「宽度」比例降采样（不放大）。
