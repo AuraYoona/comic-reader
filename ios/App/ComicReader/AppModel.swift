@@ -31,6 +31,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var booted = false
 
     init() {
+        // 压缩格式适配器装配：注册表默认为空，不装的话 ZIP/CBZ/RAR/PDF
+        // 的导入与阅读全部报「不支持的文件格式」
+        sharedArchiveRegistry.installBuiltinReaders()
+
         let paths = AppPaths.live()
         paths.ensureDirectories()
 

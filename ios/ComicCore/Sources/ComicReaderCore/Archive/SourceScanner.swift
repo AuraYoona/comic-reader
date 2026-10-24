@@ -36,6 +36,23 @@ public func readerFor(_ sourcePath: String) throws -> ArchiveReader {
     try sharedArchiveRegistry.reader(for: sourcePath)
 }
 
+extension ArchiveRegistry {
+    /// 装配内置适配器；App 启动时调用一次（注册表默认为空，缺了这一步
+    /// 所有压缩包的导入与阅读都会报「不支持的文件格式」）。
+    /// 放在 Core 里做 canImport 门控，保证与各适配器的编译条件永远一致。
+    public func installBuiltinReaders() {
+        #if canImport(ZIPFoundation)
+        register(.zip, ZipArchiveReader())
+        #endif
+        #if canImport(UnrarKit)
+        register(.rar, RarArchiveReader())
+        #endif
+        #if canImport(PDFKit)
+        register(.pdf, PdfArchiveReader())
+        #endif
+    }
+}
+
 /// 来源是否仍然可访问（书架“来源丢失”校验用）
 public func sourceExists(_ sourcePath: String) -> Bool {
     FileManager.default.fileExists(atPath: sourcePath)
