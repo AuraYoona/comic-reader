@@ -13,6 +13,10 @@ public final class ZipArchiveReader: ArchiveReader {
     private final class Handle {
         let archive: Archive
         let url: URL
+        /// ZIPFoundation 的 Archive 终身持有单个 FILE* 且 extract 全程无锁，
+        /// 并发读同一文件会互相踩踏读位置（fseek 交错 → 解压出损坏数据）。
+        /// 对齐 RAR 路径 URKArchive 自带的 @synchronized(threadLock) 串行化
+        let ioLock = NSLock()
         init(archive: Archive, url: URL) {
             self.archive = archive
             self.url = url
@@ -40,6 +44,8 @@ public final class ZipArchiveReader: ArchiveReader {
 
     public func list(_ file: String) throws -> [ArchiveEntry] {
         let handle = try awaitBlocking { try await self.cache.acquire(file) }
+        handle.ioLock.lock()
+        defer { handle.ioLock.unlock() }
         return handle.archive.map { entry in
             ArchiveEntry(name: entry.path, isDirectory: entry.type == .directory)
         }
@@ -47,6 +53,11 @@ public final class ZipArchiveReader: ArchiveReader {
 
     public func read(_ file: String, entry: String) throws -> Data {
         let handle = try awaitBlocking { try await self.cache.acquire(file) }
+        // 条目下标查找同样是共享 FILE* 上的 IO（惰性线性扫中央目录，
+        // 每条 fseek+fread），必须与 extract 同一把锁——只锁 extract 挡不住
+        // 「一个线程持锁顺序读、另一个线程在锁外 fseek」的交错踩踏
+        handle.ioLock.lock()
+        defer { handle.ioLock.unlock() }
         guard let archiveEntry = handle.archive[entry] else {
             throw SourceError("压缩包内没有这个条目：\(entry)", path: file)
         }

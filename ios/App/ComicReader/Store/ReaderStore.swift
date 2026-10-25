@@ -38,6 +38,9 @@ final class ReaderStore: ObservableObject {
     private let pages: PageProvider
     private var persistTask: Task<Void, Never>?
     private var endHintTask: Task<Void, Never>?
+    /// 打开会话号：open 有了 await 点之后，close 后立即重开时
+    /// 旧扫描凭它作废（否则旧结果会把新会话的状态覆盖回去）
+    private var openEpoch = 0
 
     init(db: LibraryDatabase, settings: SettingsStore, pages: PageProvider) {
         self.db = db
@@ -49,31 +52,40 @@ final class ReaderStore: ObservableObject {
 
     /// 打开漫画：重新扫描来源 → 刷新页数 → 解析偏好（按本覆盖全局）→ 定位到上次页码
     func open(id: String, fromStart: Bool = false) async {
-        guard !opening else { return }
+        // 同一会话内的重复 open（连点）忽略；但上一次还在扫描、且已被 close()
+        // 的场景必须放行——否则「退出后马上再点开」会被静默丢弃
+        guard !opening || !active else { return }
         opening = true
+        openEpoch &+= 1
+        let epoch = openEpoch
+        defer { if epoch == openEpoch { opening = false } }
         error = nil
         active = true
-        defer { opening = false }
 
         guard let stored = db.getComic(id: id) else {
             error = "漫画记录不存在"
             return
         }
 
-        // 强制刷新页列表（对齐桌面 comic:open 的 rescan）
+        // 强制刷新页列表（对齐桌面 comic:open 的 rescan）。扫描走专用队列：
+        // 压缩包的 list() 内部经 awaitBlocking 信号量等待，在主线程上同步跑
+        // 会把 UI 整个冻住（最坏 30 秒超时）
         invalidateComic(id)
         let list: [String]
         do {
-            list = try scanSource(sourceType: stored.sourceType, sourcePath: stored.sourcePath)
+            list = try await scanSourceAsync(sourceType: stored.sourceType, sourcePath: stored.sourcePath)
         } catch let e as SourceError {
-            error = e.message
+            if epoch == openEpoch { error = e.message }
             return
         } catch {
             // 注意：裸 catch 会隐式绑定名为 error 的局部常量，遮蔽同名属性；
             // 必须用 self. 前缀才能写到属性上
-            self.error = "打开失败，文件可能已损坏"
+            if epoch == openEpoch { self.error = "打开失败，文件可能已损坏" }
             return
         }
+        // 扫描等待期间会话可能已被 close() 或被新的 open 接管：放弃，
+        // 避免把清空/新会话的状态覆盖回去
+        guard epoch == openEpoch, active else { return }
         guard !list.isEmpty else {
             error = "这本漫画里没有页面"
             return

@@ -30,6 +30,11 @@ final class AppModel: ObservableObject {
 
     @Published private(set) var booted = false
 
+    /// .inactive 落盘队列：整库编码+写盘不能占主线程（此刻界面仍可见），
+    /// 但从应用切换器划卡强杀通常收不到 .background，所以仍要落——
+    /// 派到后台串行队列，赶在进程终止前写完
+    private let dbFlushQueue = DispatchQueue(label: "com.aurayoona.comicreader.db.flush")
+
     init() {
         // 压缩格式适配器装配：注册表默认为空，不装的话 ZIP/CBZ/RAR/PDF
         // 的导入与阅读全部报「不支持的文件格式」
@@ -102,8 +107,13 @@ final class AppModel: ObservableObject {
             // iOS 会挂起进程，局域网监听留着也收不到包
             transfer.handleBackground()
         case .inactive:
+            // .inactive 由下拉通知中心 / 控制中心 / 应用切换器触发且界面仍
+            // 可见：落盘挪到后台串行队列（writeToDisk 快照在数据库锁内、写盘
+            // 在 ioLock 下且有写序号保护，与防抖定时器/后台 flush 并发安全）
             reader.flushPersist()
-            db.flushSync()
+            dbFlushQueue.async { [db] in
+                db.flushSync()
+            }
         default:
             break
         }

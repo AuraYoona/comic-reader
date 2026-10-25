@@ -176,15 +176,14 @@ final class ShelfStore: ObservableObject {
         importing = ImportBusy(active: true, label: "正在导入", current: 0, total: paths.count, path: "")
 
         let importer = self.importer
-        let results: [ImportResult] = await Task.detached(priority: .userInitiated) {
-            importer.importPaths(paths) { info in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.importing.current = info.current
-                    self.importing.path = (info.path as NSString).lastPathComponent
-                }
+        // 走归档专用队列（importPathsAsync）：detached 会把信号量等待留在协作池
+        let results: [ImportResult] = await importer.importPathsAsync(paths) { info in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.importing.current = info.current
+                self.importing.path = (info.path as NSString).lastPathComponent
             }
-        }.value
+        }
 
         importing = .idle
         comics = db.listComics()
@@ -206,9 +205,7 @@ final class ShelfStore: ObservableObject {
     /// 启动 / 手动扫描库目录：新增的漫画自动上架
     func scanRoots(silent: Bool = false) async {
         let importer = self.importer
-        let result: ScanRootsResult = await Task.detached(priority: .utility) {
-            importer.scanLibraryRoots()
-        }.value
+        let result: ScanRootsResult = await importer.scanLibraryRootsAsync()
 
         comics = db.listComics()
         if !result.added.isEmpty {
@@ -281,7 +278,7 @@ final class ShelfStore: ObservableObject {
             guard let c = db.getComic(id: id) else { continue }
             invalidateComic(id)
             do {
-                let list = try scanSource(sourceType: c.sourceType, sourcePath: c.sourcePath)
+                let list = try await scanSourceAsync(sourceType: c.sourceType, sourcePath: c.sourcePath)
                 guard !list.isEmpty else {
                     throw SourceError("这本漫画里没有页面")
                 }

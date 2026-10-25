@@ -23,7 +23,14 @@ struct ScrollReaderView: View {
 
     @State private var heights: [Int: CGFloat] = [:]
     @State private var busState = BusState()
-    @State private var suppressMidlineReport = false
+    /// 最近一次由滚动位置上报的页码（对齐桌面版 lastReported ref）：
+    /// onChange 消费时用它区分「滚动自身翻页」与「外部跳页」
+    @State private var lastReportedPage = -1
+    /// 初始定位是否完成：恢复上次位置的滚动落地之前，中线不参与页码判定
+    /// （否则挂载瞬间顶部槽位会抢先把页码归零，还把 lastReadPage 覆写进库）
+    @State private var restoreSettled = false
+    /// 恢复定位的延迟校正任务（可取消；离开阅读器/用户接管时作废）
+    @State private var restoreCorrections: [DispatchWorkItem] = []
 
     var body: some View {
         GeometryReader { geo in
@@ -46,9 +53,30 @@ struct ScrollReaderView: View {
                     // 轻点（非拖动）切工具条；拖动滚动不受影响
                     TapGesture().onEnded { onToggleBars() }
                 )
+                .onAppear {
+                    // 恢复上次阅读位置（对齐桌面版 mount 时的 scrollIntoView；
+                    // onChange 对初始值不触发，不主动滚就永远停在顶部）
+                    lastReportedPage = reader.page
+                    if reader.page > 0 {
+                        proxy.scrollTo(reader.page, anchor: .top)
+                        // 懒加载槽位的高度要等图片解码后才稳定：延迟校正两轮
+                        // （对齐桌面版 350ms 二次校正；解码慢的目标页靠后一轮）
+                        scheduleRestoreCorrection(0.35, proxy: proxy)
+                        scheduleRestoreCorrection(0.9, proxy: proxy)
+                    } else {
+                        restoreSettled = true
+                    }
+                }
+                .onDisappear {
+                    for item in restoreCorrections { item.cancel() }
+                    restoreCorrections.removeAll()
+                }
                 .onChange(of: reader.page) { newPage in
-                    // 外部跳页（进度条 / 缩略图条 / 书签）→ 滚到该页顶部
-                    if !suppressMidlineReport {
+                    // 外部跳页（进度条 / 缩略图条 / 书签）→ 滚到该页顶部。
+                    // 先消费 lastReportedPage（对齐桌面版 ScrollView.tsx:104），
+                    // 否则「跳回最近上报过的页」会被误判为滚动自身而吞掉
+                    if newPage != lastReportedPage {
+                        lastReportedPage = newPage
                         proxy.scrollTo(newPage, anchor: .top)
                     }
                 }
@@ -112,16 +140,34 @@ struct ScrollReaderView: View {
     }
 
     private func reportMidline(index: Int, frame: CGRect, viewportHeight: CGFloat) {
+        guard restoreSettled else { return }
         guard viewportHeight > 0 else { return }
         let mid = viewportHeight / 2
         guard frame.minY <= mid, frame.maxY >= mid else { return }
+        // 先记录再判定：视口与 reader.page 一致时也要同步 lastReportedPage，
+        // 否则「外部跳回最近上报过的页」会被误判成滚动自身而漏滚
+        lastReportedPage = index
         guard reader.page != index else { return }
-        suppressMidlineReport = true
         reader.setPage(index)
-        suppressMidlineReport = false
     }
 
     // MARK: 滚动总线（scrollBus.ts 的移植）
+
+    /// 恢复定位的延迟校正：用户已接管滚动（拖动 / 惯性）时不再拽回，
+    /// 直接开闸让中线从用户实际位置接管页码
+    private func scheduleRestoreCorrection(_ delay: TimeInterval, proxy: ScrollViewProxy) {
+        let item = DispatchWorkItem {
+            if let scroll = Self.findScrollView(),
+               scroll.isTracking || scroll.isDragging || scroll.isDecelerating {
+                restoreSettled = true
+                return
+            }
+            proxy.scrollTo(reader.page, anchor: .top)
+            restoreSettled = true
+        }
+        restoreCorrections.append(item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
 
     private func bindScrollBus() {
         guard busState.tokens.isEmpty else { return }
