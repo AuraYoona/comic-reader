@@ -19,6 +19,9 @@ struct ScrollReaderView: View {
     private final class BusState: @unchecked Sendable {
         var autoPos: CGFloat = -1
         var tokens: [NSObjectProtocol] = []
+        /// 宿主 UIScrollView 缓存（主线程访问）：几何回调高频触发，
+        /// 不能每次都递归遍历视图树去找
+        weak var host: UIScrollView?
     }
 
     @State private var heights: [Int: CGFloat] = [:]
@@ -26,11 +29,18 @@ struct ScrollReaderView: View {
     /// 最近一次由滚动位置上报的页码（对齐桌面版 lastReported ref）：
     /// onChange 消费时用它区分「滚动自身翻页」与「外部跳页」
     @State private var lastReportedPage = -1
-    /// 初始定位是否完成：恢复上次位置的滚动落地之前，中线不参与页码判定
-    /// （否则挂载瞬间顶部槽位会抢先把页码归零，还把 lastReadPage 覆写进库）
-    @State private var restoreSettled = false
-    /// 恢复定位的延迟校正任务（可取消；离开阅读器/用户接管时作废）
-    @State private var restoreCorrections: [DispatchWorkItem] = []
+    /// 各槽位在内容坐标里的绝对 Y（minY + 回调时刻的 contentOffset）。
+    /// 绝对 Y 只随布局变化移动、不随滚动漂移——闭环定位的实测输入
+    @State private var slotAbsoluteY: [Int: CGFloat] = [:]
+    /// 非 nil = 正在把视口定位到该页（中线闸关闭）；nil = 闸开，页码跟随视口
+    @State private var positioningTarget: Int?
+    /// 上一轮程序性滚动的锚点 offset。nil = 尚未锚定，差值检测跳过
+    /// （自举 scrollTo 的位移不能被误判成用户接管）
+    @State private var programmaticOffset: CGFloat?
+    @State private var positioningWork: [DispatchWorkItem] = []
+    /// 锚定补偿开关（视口上方行长高时顶回 offset，等价 CSS overflow
+    /// anchoring）；真机若出现异常位移可单独关闭
+    private let anchorCompensationEnabled = true
 
     var body: some View {
         GeometryReader { geo in
@@ -54,30 +64,22 @@ struct ScrollReaderView: View {
                     TapGesture().onEnded { onToggleBars() }
                 )
                 .onAppear {
-                    // 恢复上次阅读位置（对齐桌面版 mount 时的 scrollIntoView；
-                    // onChange 对初始值不触发，不主动滚就永远停在顶部）
-                    lastReportedPage = reader.page
+                    // 恢复上次阅读位置：闭环定位（对齐桌面版 mount 的
+                    // scrollIntoView，但落点由实测帧决定，与懒加载的高度
+                    // 估算无关——估算对条漫差 3~10 倍，scrollTo 必偏）
                     if reader.page > 0 {
-                        proxy.scrollTo(reader.page, anchor: .top)
-                        // 懒加载槽位的高度要等图片解码后才稳定：延迟校正两轮
-                        // （对齐桌面版 350ms 二次校正；解码慢的目标页靠后一轮）
-                        scheduleRestoreCorrection(0.35, proxy: proxy)
-                        scheduleRestoreCorrection(0.9, proxy: proxy)
-                    } else {
-                        restoreSettled = true
+                        beginPositioning(to: reader.page, proxy: proxy)
                     }
                 }
                 .onDisappear {
-                    for item in restoreCorrections { item.cancel() }
-                    restoreCorrections.removeAll()
+                    cancelPositioningWork()
                 }
                 .onChange(of: reader.page) { newPage in
-                    // 外部跳页（进度条 / 缩略图条 / 书签）→ 滚到该页顶部。
+                    // 外部跳页（进度条 / 缩略图条 / 书签）→ 同样走闭环定位。
                     // 先消费 lastReportedPage（对齐桌面版 ScrollView.tsx:104），
                     // 否则「跳回最近上报过的页」会被误判为滚动自身而吞掉
                     if newPage != lastReportedPage {
-                        lastReportedPage = newPage
-                        proxy.scrollTo(newPage, anchor: .top)
+                        beginPositioning(to: newPage, proxy: proxy)
                     }
                 }
             }
@@ -103,14 +105,11 @@ struct ScrollReaderView: View {
                     scale: min(reader.scale, 1),
                     autoCrop: reader.autoCrop,
                     onNatural: { w, h in
-                        // 记录真实高度（按适宽估算），卸载后占位高度不跳
-                        if w > 0 {
-                            heights[index] = width * (h / w)
-                        }
+                        guard w > 0 else { return }
+                        applyNaturalSize(index: index, width: width, ratio: h / w)
                     },
                     onSettled: nil
                 )
-                .background(midlineReporter(index: index, viewportHeight: viewportHeight))
             } else {
                 ZStack {
                     Color(uiColor: .secondarySystemBackground).opacity(0.35)
@@ -122,6 +121,67 @@ struct ScrollReaderView: View {
                 .frame(height: placeholderHeight)
             }
         }
+        // 页码侦测挂在 Group 上：占位与图片槽都要能上报。只挂图片分支时，
+        // 快甩越过 ±2 挂载窗后视口全是无上报器的占位槽，页码与窗口双双
+        // 冻结（灰屏 + 页码卡死的死锁来源）；桌面版 currentObs 观察全部槽位
+        .background(midlineReporter(index: index, viewportHeight: viewportHeight))
+    }
+
+    /// 图片真实宽高比到手：记高度；视口上方的行长高时做锚定补偿
+    /// （SwiftUI 没有 CSS overflow anchoring，不补偿则内容整体后移、视口被顶回）
+    private func applyNaturalSize(index: Int, width: CGFloat, ratio: Double) {
+        let newHeight = width * ratio
+        let oldHeight = heights[index] ?? max(420, width * 1.2)
+        guard newHeight != oldHeight else { return }
+        heights[index] = newHeight
+        if positioningTarget != nil {
+            // 定位中：目标附近高度在变，追加一轮事件驱动的闭环校正
+            scheduleExtraPositioningRound()
+            return
+        }
+        guard anchorCompensationEnabled,
+              let host = hostScrollView(),
+              !host.isTracking, !host.isDragging, !host.isDecelerating,
+              let absY = slotAbsoluteY[index],
+              absY < host.contentOffset.y - 8  // 行顶在视口上方
+        else { return }
+        let dy = newHeight - oldHeight
+        host.setContentOffset(
+            CGPoint(x: 0, y: Self.clampOffset(host.contentOffset.y + dy, for: host)),
+            animated: false
+        )
+    }
+
+    /// 槽位几何回调：记录绝对 Y（闭环定位的实测输入）+ 页码闸门判定
+    private func observeSlot(index: Int, frame: CGRect, viewportHeight: CGFloat) {
+        guard let host = hostScrollView() else {
+            if positioningTarget == nil {
+                reportMidline(index: index, frame: frame, viewportHeight: viewportHeight)
+            }
+            return
+        }
+        slotAbsoluteY[index] = frame.minY + host.contentOffset.y
+        guard positioningTarget != nil else {
+            reportMidline(index: index, frame: frame, viewportHeight: viewportHeight)
+            return
+        }
+        // 闸关：只有「视口被用户 / 自动滚动带走」才开闸（手势三旗，或相对
+        // 程序锚点漂移 >48pt）。UIKit 在 contentSize 收缩时会把 offset 钳到
+        // 边界——恰好贴住 0/maxOffset 是钳制特征，重同步而非判接管。
+        // 定位失败且用户未动时保持闸关：page 维持恢复目标入库，不写错页
+        if host.isTracking || host.isDragging || host.isDecelerating {
+            finishPositioning()
+            return
+        }
+        if let prog = programmaticOffset, abs(host.contentOffset.y - prog) > 48 {
+            let maxOffset = max(0, host.contentSize.height - host.bounds.height)
+            let clampedToEdge = host.contentOffset.y <= 1 || abs(host.contentOffset.y - maxOffset) <= 1
+            if clampedToEdge {
+                programmaticOffset = host.contentOffset.y
+            } else {
+                finishPositioning()
+            }
+        }
     }
 
     /// 页中线交叉检测：包含视口中线的槽位成为当前页
@@ -129,18 +189,17 @@ struct ScrollReaderView: View {
         GeometryReader { geo in
             let frame = geo.frame(in: .named("readerScroll"))
             Color.clear
-                .onAppear { reportMidline(index: index, frame: frame, viewportHeight: viewportHeight) }
+                .onAppear { observeSlot(index: index, frame: frame, viewportHeight: viewportHeight) }
                 .onChange(of: frame.minY) { _ in
-                    reportMidline(index: index, frame: frame, viewportHeight: viewportHeight)
+                    observeSlot(index: index, frame: frame, viewportHeight: viewportHeight)
                 }
                 .onChange(of: frame.maxY) { _ in
-                    reportMidline(index: index, frame: frame, viewportHeight: viewportHeight)
+                    observeSlot(index: index, frame: frame, viewportHeight: viewportHeight)
                 }
         }
     }
 
     private func reportMidline(index: Int, frame: CGRect, viewportHeight: CGFloat) {
-        guard restoreSettled else { return }
         guard viewportHeight > 0 else { return }
         let mid = viewportHeight / 2
         guard frame.minY <= mid, frame.maxY >= mid else { return }
@@ -153,20 +212,84 @@ struct ScrollReaderView: View {
 
     // MARK: 滚动总线（scrollBus.ts 的移植）
 
-    /// 恢复定位的延迟校正：用户已接管滚动（拖动 / 惯性）时不再拽回，
-    /// 直接开闸让中线从用户实际位置接管页码
-    private func scheduleRestoreCorrection(_ delay: TimeInterval, proxy: ScrollViewProxy) {
-        let item = DispatchWorkItem {
-            if let scroll = Self.findScrollView(),
-               scroll.isTracking || scroll.isDragging || scroll.isDecelerating {
-                restoreSettled = true
-                return
+    // MARK: 恢复 / 跳页定位（闭环实测，与懒加载的高度估算无关）
+    //
+    // scrollTo 对懒栈里未物化的行只能按内部估算落点（条漫真实页高是估算的
+    // 3~10 倍，必偏）。这里 scrollTo 只负责「自举物化目标行」，落点由实测帧
+    // 决定：槽位几何回调记录每行的绝对 Y，定位轮把 contentOffset 直接设到
+    // 「目标行顶贴视口顶」。定位期间（闸关）中线不上报页码——定位失败且
+    // 用户未动时 page 保持恢复目标入库，绝不写错页；用户的第一个手势开闸。
+
+    /// 开始闭环定位：恢复位置 / 外部跳页共用
+    private func beginPositioning(to target: Int, proxy: ScrollViewProxy) {
+        cancelPositioningWork()
+        positioningTarget = target
+        programmaticOffset = nil
+        lastReportedPage = target
+        // iOS 16 首帧布局完成前 scrollTo 可能被丢弃：推迟到下一 runloop 发
+        DispatchQueue.main.async { proxy.scrollTo(target, anchor: .top) }
+        for delay in [0.35, 0.9, 1.6, 2.6] {
+            scheduleRound(after: delay) { [proxy] in
+                self.positioningStep(target: target, proxy: proxy)
             }
-            proxy.scrollTo(reader.page, anchor: .top)
-            restoreSettled = true
         }
-        restoreCorrections.append(item)
+    }
+
+    /// 定位中的高度变化（图片解码完成）追加一轮事件驱动的校正
+    private func scheduleExtraPositioningRound() {
+        guard let target = positioningTarget else { return }
+        scheduleRound(after: 0.15) {
+            self.positioningStep(target: target, proxy: nil)
+        }
+    }
+
+    private func scheduleRound(after delay: TimeInterval, _ step: @escaping @Sendable () -> Void) {
+        let item = DispatchWorkItem(block: step)
+        positioningWork.append(item)
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    private func positioningStep(target: Int, proxy: ScrollViewProxy?) {
+        guard positioningTarget == target else { return }
+        guard let host = hostScrollView() else { return }
+        // 收敛：实测绝对 Y 与当前 offset 对齐（上一轮设完后未再漂移）
+        if let absY = slotAbsoluteY[target], abs(absY - host.contentOffset.y) <= 24 {
+            finishPositioning()
+            return
+        }
+        // 手势接管 → 开闸，页码从用户实际位置自愈
+        if host.isTracking || host.isDragging || host.isDecelerating {
+            finishPositioning()
+            return
+        }
+        guard let absY = slotAbsoluteY[target] else {
+            // 目标行尚未物化：scrollTo 自举（估算落点不准无妨，只为物化）。
+            // 不写 programmaticOffset——自举位移不得被误判成用户接管
+            proxy?.scrollTo(target, anchor: .top)
+            return
+        }
+        let desired = Self.clampOffset(absY, for: host)
+        host.setContentOffset(CGPoint(x: 0, y: desired), animated: false)
+        programmaticOffset = desired
+    }
+
+    private func finishPositioning() {
+        positioningTarget = nil
+        programmaticOffset = nil
+        cancelPositioningWork()
+    }
+
+    private func cancelPositioningWork() {
+        for item in positioningWork { item.cancel() }
+        positioningWork.removeAll()
+    }
+
+    /// 宿主 UIScrollView（带缓存）：几何回调高频触发，不能每次遍历视图树
+    private func hostScrollView() -> UIScrollView? {
+        if let cached = busState.host { return cached }
+        let found = Self.findScrollView()
+        if let found { busState.host = found }
+        return found
     }
 
     private func bindScrollBus() {

@@ -72,6 +72,10 @@ struct PageImageView: View {
                         .controlSize(.regular)
                 }
             }
+            .frame(maxWidth: .infinity)
+            // 加载中也占住槽位高度：无此约束时 LazyVStack 的无界高度提案会让
+            // 槽位塌缩为 0（占位高 → 0 → 真实高 的两级跳变是滚动抖动主源）
+            .frame(height: max(boxSize.height, 120), alignment: .top)
         }
     }
 
@@ -179,6 +183,11 @@ struct PageImageView: View {
 
     private func load() async {
         showSlowLoad = false
+        // 同步快路径：命中解码缓存直接上屏，重挂载不闪占位（高度不塌缩）
+        if image == nil {
+            let cached = Self.decodeTargetSize(pointWidth: boxSize.width, scale: scale)
+            image = pages.cachedPage(comic: comic, index: index, maxPixelSize: cached)
+        }
         let slowTask = Task { [self] in
             try? await Task.sleep(nanoseconds: Self.slowLoadHintNs)
             guard !Task.isCancelled else { return }
