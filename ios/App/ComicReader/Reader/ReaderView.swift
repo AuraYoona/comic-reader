@@ -65,10 +65,7 @@ struct ReaderView: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
-                .background(
-                    Capsule().fill(.regularMaterial)
-                        .shadow(color: .black.opacity(0.3), radius: 14, y: 5)
-                )
+                .liquidGlass(in: Capsule(), shadowOpacity: 0.30)
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 80)
                 .transition(.opacity)

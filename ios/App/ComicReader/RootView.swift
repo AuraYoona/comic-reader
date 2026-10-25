@@ -39,10 +39,11 @@ struct ToastOverlay: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .background(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(background(for: toast.kind))
-                            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                    .liquidGlass(
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                        tint: background(for: toast.kind),
+                        tintOpacity: 0.80,
+                        shadowOpacity: 0.25
                     )
                     .onTapGesture { toasts.dismiss(toast.id) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -54,10 +55,12 @@ struct ToastOverlay: View {
     }
 
     private func background(for kind: ToastCenter.Kind) -> Color {
+        // 不透明色：透明度统一由 liquidGlass 的 tintOpacity 提供
+        // （此前颜色自带 alpha 再乘 tint 会双重打折，浅色模式下白字对比度不足）
         switch kind {
-        case .info: return Color.black.opacity(0.78)
-        case .success: return Color(red: 0.18, green: 0.62, blue: 0.42).opacity(0.95)
-        case .error: return Color(red: 0.85, green: 0.32, blue: 0.32).opacity(0.95)
+        case .info: return Color.black
+        case .success: return Color(red: 0.18, green: 0.62, blue: 0.42)
+        case .error: return Color(red: 0.85, green: 0.32, blue: 0.32)
         }
     }
 }

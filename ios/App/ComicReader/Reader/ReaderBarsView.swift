@@ -61,9 +61,11 @@ struct ReaderTopBar: View {
 
             jumpRow
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal, 10)
         .padding(.top, 6)
-        .padding(.bottom, 8)
-        .background(.bar)
     }
 
     // MARK: 页码输入跳转（PageJump 的移植）
@@ -173,9 +175,11 @@ struct ReaderBottomBar: View {
             progressRow
             controlsRow
         }
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(.bar)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
         // 章节目录（分章节文件夹的漫画）
         .sheet(isPresented: $showChapters) {
             ChapterSheet()
