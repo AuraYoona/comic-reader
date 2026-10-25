@@ -108,4 +108,67 @@ public final class ZipArchiveReader: ArchiveReader {
         cache.releaseAll()
     }
 }
+
+extension ZipArchiveReader {
+    /// 整包解压到目标目录（章节并入用）：条目名经 GBK 修复后按原始相对
+    /// 路径落盘（保留「第03话/…」的目录结构）；剥离路径非法字符、丢弃
+    /// 含 .. 的条目（防穿越）与隐藏文件；重名加序号避让。
+    /// 逐条迭代与 extract 都在共享 FILE* 上做 IO——整段持 ioLock，
+    /// 避免与并发读页互相踩踏。返回写出的文件数
+    @discardableResult
+    public func extractAll(_ file: String, toDirectory dir: String) throws -> Int {
+        let handle = try awaitBlocking { try await self.cache.acquire(file) }
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let invalid = CharacterSet(charactersIn: "/\\:?*\"<>|").union(.controlCharacters)
+
+        handle.ioLock.lock()
+        defer { handle.ioLock.unlock() }
+
+        var written = 0
+        var usedPaths = Set<String>()
+        for entry in handle.archive where entry.type != .directory {
+            let name = Self.repairEntryName(entry.path)
+            let parts = name.split(separator: "/").map(String.init)
+            guard !parts.isEmpty, !parts.contains(".."), let last = parts.last, !last.isEmpty else {
+                continue
+            }
+            var safeParts: [String] = []
+            for part in parts {
+                let safe = part.components(separatedBy: invalid).joined(separator: "_")
+                guard !safe.isEmpty, !safe.hasPrefix(".") else {
+                    safeParts = []
+                    break
+                }
+                safeParts.append(safe)
+            }
+            guard !safeParts.isEmpty else { continue }
+
+            var dest = (dir as NSString).appendingPathComponent(safeParts.joined(separator: "/"))
+            if usedPaths.contains(dest) || fm.fileExists(atPath: dest) {
+                let ext = (dest as NSString).pathExtension
+                let stem = (dest as NSString).deletingPathExtension
+                var n = 2
+                repeat {
+                    let candidate = ext.isEmpty ? "\(stem) (\(n))" : "\(stem) (\(n)).\(ext)"
+                    dest = candidate
+                    n += 1
+                } while usedPaths.contains(dest) || fm.fileExists(atPath: dest)
+            }
+            usedPaths.insert(dest)
+
+            try fm.createDirectory(
+                atPath: (dest as NSString).deletingLastPathComponent,
+                withIntermediateDirectories: true
+            )
+            var data = Data()
+            _ = try handle.archive.extract(entry, bufferSize: 64 * 1024) { chunk in
+                data.append(chunk)
+            }
+            try data.write(to: URL(fileURLWithPath: dest))
+            written += 1
+        }
+        return written
+    }
+}
 #endif

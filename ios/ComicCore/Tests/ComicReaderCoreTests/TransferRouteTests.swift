@@ -1,114 +1,69 @@
 import XCTest
 @testable import ComicReaderCore
 
-// TransferRoute：密码即首段路径；查询串解码；未知路径保留密码便于区分 403/404
+// TransferRoute：无密码设计，路径首段即接口；查询串解码
 
 final class TransferRouteTests: XCTestCase {
     func testLanding() {
         XCTAssertEqual(TransferRoute.parse("/"), .landing)
         XCTAssertEqual(TransferRoute.parse("/?x=1"), .landing)
         XCTAssertEqual(TransferRoute.parse("//"), .landing)
-        XCTAssertFalse(TransferRoute.parse("/").requiresToken)
-    }
-
-    func testPageWithAndWithoutTrailingSlash() {
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/"),
-            .page(token: "482913", trailingSlash: true)
-        )
-        XCTAssertEqual(
-            TransferRoute.parse("/482913"),
-            .page(token: "482913", trailingSlash: false)
-        )
     }
 
     func testUploadWithoutName() {
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/upload"),
-            .upload(token: "482913", fileName: nil)
-        )
+        XCTAssertEqual(TransferRoute.parse("/upload"), .upload(fileName: nil))
     }
 
     func testUploadNameDecoding() {
         XCTAssertEqual(
-            TransferRoute.parse("/482913/upload?name=One%20Piece%2001.cbz"),
-            .upload(token: "482913", fileName: "One Piece 01.cbz")
+            TransferRoute.parse("/upload?name=One%20Piece%2001.cbz"),
+            .upload(fileName: "One Piece 01.cbz")
         )
         XCTAssertEqual(
-            TransferRoute.parse("/482913/upload?name=%E6%BC%AB%E7%94%BB%2001.cbz"),
-            .upload(token: "482913", fileName: "漫画 01.cbz")
+            TransferRoute.parse("/upload?name=%E6%BC%AB%E7%94%BB%2001.cbz"),
+            .upload(fileName: "漫画 01.cbz")
         )
         // 表单编码：+ 是空格，%2B 才是加号
         XCTAssertEqual(
-            TransferRoute.parse("/482913/upload?name=a+b.cbz"),
-            .upload(token: "482913", fileName: "a b.cbz")
+            TransferRoute.parse("/upload?name=a+b.cbz"),
+            .upload(fileName: "a b.cbz")
         )
         XCTAssertEqual(
-            TransferRoute.parse("/482913/upload?name=a%2Bb.cbz"),
-            .upload(token: "482913", fileName: "a+b.cbz")
+            TransferRoute.parse("/upload?name=a%2Bb.cbz"),
+            .upload(fileName: "a+b.cbz")
         )
     }
 
     func testUploadIgnoresOtherQueryParameters() {
         XCTAssertEqual(
-            TransferRoute.parse("/482913/upload?foo=1&name=x.cbz&bar=2"),
-            .upload(token: "482913", fileName: "x.cbz")
+            TransferRoute.parse("/upload?foo=1&name=x.cbz&bar=2"),
+            .upload(fileName: "x.cbz")
         )
     }
 
     func testOtherRoutes() {
-        XCTAssertEqual(TransferRoute.parse("/482913/state"), .state(token: "482913"))
-        XCTAssertEqual(TransferRoute.parse("/482913/library"), .library(token: "482913"))
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/cover/abc-123"),
-            .cover(token: "482913", id: "abc-123")
-        )
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/download/abc-123"),
-            .download(token: "482913", id: "abc-123")
-        )
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/download/a%20b"),
-            .download(token: "482913", id: "a b")
-        )
+        XCTAssertEqual(TransferRoute.parse("/state"), .state)
+        XCTAssertEqual(TransferRoute.parse("/library"), .library)
+        XCTAssertEqual(TransferRoute.parse("/cover/abc-123"), .cover(id: "abc-123"))
+        XCTAssertEqual(TransferRoute.parse("/download/abc-123"), .download(id: "abc-123"))
+        XCTAssertEqual(TransferRoute.parse("/download/a%20b"), .download(id: "a b"))
     }
 
-    func testUnknownPathKeepsToken() {
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/nope"),
-            .notFound(token: "482913")
-        )
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/library/extra"),
-            .notFound(token: "482913")
-        )
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/cover"),
-            .notFound(token: "482913")
-        )
+    func testUnknownPaths() {
+        XCTAssertEqual(TransferRoute.parse("/nope"), .notFound)
+        XCTAssertEqual(TransferRoute.parse("/library/extra"), .notFound)
+        XCTAssertEqual(TransferRoute.parse("/cover"), .notFound)
+        // 无密码后路径首段是接口名，纯数字（旧二维码地址）是未知路径
+        XCTAssertEqual(TransferRoute.parse("/482913/"), .notFound)
     }
 
     func testBadPercentEncoding() {
-        XCTAssertEqual(TransferRoute.parse("/%ZZ/"), .notFound(token: nil))
-        XCTAssertEqual(TransferRoute.parse("/482913/upload?name=%ZZ"), .upload(token: "482913", fileName: nil))
-    }
-
-    func testTokenTooLong() {
-        let token = String(repeating: "1", count: 65)
-        XCTAssertEqual(TransferRoute.parse("/\(token)/"), .notFound(token: nil))
+        XCTAssertEqual(TransferRoute.parse("/%ZZ/"), .notFound)
+        XCTAssertEqual(TransferRoute.parse("/upload?name=%ZZ"), .upload(fileName: nil))
     }
 
     func testFragmentIsDropped() {
-        XCTAssertEqual(
-            TransferRoute.parse("/482913/library#section"),
-            .library(token: "482913")
-        )
-    }
-
-    func testRequiresToken() {
-        XCTAssertTrue(TransferRoute.parse("/482913/").requiresToken)
-        XCTAssertTrue(TransferRoute.parse("/482913/library").requiresToken)
-        XCTAssertFalse(TransferRoute.parse("/").requiresToken)
+        XCTAssertEqual(TransferRoute.parse("/library#section"), .library)
     }
 
     func testQueryValueDirectly() {

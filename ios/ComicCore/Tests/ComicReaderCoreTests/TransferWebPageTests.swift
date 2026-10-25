@@ -4,20 +4,6 @@ import XCTest
 // TransferWebPage：占位符替换、设备名转义、接口相对路径
 
 final class TransferWebPageTests: XCTestCase {
-    func testLandingPage() {
-        let page = TransferWebPage.landing()
-        XCTAssertTrue(page.contains("id=\"code\""))
-        XCTAssertTrue(page.contains("location.href"))
-        XCTAssertFalse(page.contains("密码不正确"))
-        XCTAssertFalse(page.contains("{{"))
-    }
-
-    func testLandingWrongCode() {
-        let page = TransferWebPage.landing(wrongCode: true)
-        XCTAssertTrue(page.contains("密码不正确"))
-        XCTAssertTrue(page.contains("role=\"alert\""))
-    }
-
     func testAppPageInjectsDeviceAndCount() {
         let page = TransferWebPage.app(deviceName: "Aura 的 iPhone", libraryCount: 42)
         XCTAssertTrue(page.contains("Aura 的 iPhone"))
@@ -46,6 +32,12 @@ final class TransferWebPageTests: XCTestCase {
             XCTAssertTrue(page.contains(needle), "missing \(needle)")
         }
         XCTAssertTrue(page.contains("var BASE = './';"))
+    }
+
+    func testAppPageHasNoPasswordUI() {
+        let page = TransferWebPage.app(deviceName: "i", libraryCount: 1)
+        XCTAssertFalse(page.contains("密码"))
+        XCTAssertFalse(page.contains("id=\"code\""))
     }
 
     func testHtmlEscape() {

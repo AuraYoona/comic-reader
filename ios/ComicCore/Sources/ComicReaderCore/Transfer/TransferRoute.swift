@@ -2,56 +2,27 @@ import Foundation
 
 // MARK: - 局域网传输路由
 //
-// 密码就是路径的第一段：http://<ip>:<port>/<6 位密码>/…
-// 页面用相对路径访问 upload / state / library / cover / download，
-// 因此页面本身不需要在 JS 里拼密码。
+// 无密码设计：同一 Wi-Fi 网段本身就是信任边界（路由器隔离了外部访问），
+// 再套一层 6 位数字口令只增加输入摩擦。页面以 / 结尾提供，所有接口
+// 都用相对路径。
 //
 // 纯字符串处理，便于单测（含百分号解码、尾斜杠与未知路径）。
 
 public enum TransferRoute: Equatable, Sendable {
-    /// GET / —— 密码输入页（无鉴权）
+    /// GET / —— 传输主页面
     case landing
-    /// GET /<code>/ —— 传输主页面
-    case page(token: String, trailingSlash: Bool)
-    /// PUT/POST /<code>/upload?name=… —— 裸 body 上传
-    case upload(token: String, fileName: String?)
-    /// GET /<code>/state —— 最近上传状态
-    case state(token: String)
-    /// GET /<code>/library —— 书架列表
-    case library(token: String)
-    /// GET /<code>/cover/<id> —— 封面
-    case cover(token: String, id: String)
-    /// GET /<code>/download/<id> —— 下载原文件 / 文件夹打 zip
-    case download(token: String, id: String)
-    /// 未知路径；尽量保留第一段密码，便于区分「404」与「密码错误」
-    case notFound(token: String?)
-
-    /// 路由里的密码（landing 为 nil）
-    public var token: String? {
-        switch self {
-        case .landing:
-            return nil
-        case .page(let token, _),
-             .upload(let token, _),
-             .state(let token),
-             .library(let token),
-             .cover(let token, _),
-             .download(let token, _):
-            return token
-        case .notFound(let token):
-            return token
-        }
-    }
-
-    /// 该路由是否必须携带正确密码
-    public var requiresToken: Bool {
-        switch self {
-        case .landing:
-            return false
-        default:
-            return true
-        }
-    }
+    /// PUT/POST /upload?name=… —— 裸 body 上传
+    case upload(fileName: String?)
+    /// GET /state —— 最近上传状态
+    case state
+    /// GET /library —— 书架列表
+    case library
+    /// GET /cover/<id> —— 封面
+    case cover(id: String)
+    /// GET /download/<id> —— 下载原文件 / 文件夹打 zip
+    case download(id: String)
+    /// 未知路径
+    case notFound
 
     /// 解析请求目标（origin-form：以 "/" 开头的 path + 可选 query）
     public static func parse(_ target: String) -> TransferRoute {
@@ -67,9 +38,7 @@ public enum TransferRoute: Equatable, Sendable {
             query = String(raw[raw.index(after: mark)...])
         }
 
-        guard path.hasPrefix("/") else { return .notFound(token: nil) }
-
-        let trailingSlash = path.count > 1 && path.hasSuffix("/")
+        guard path.hasPrefix("/") else { return .notFound }
         let rawSegments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
         guard !rawSegments.isEmpty else { return .landing }
 
@@ -77,37 +46,30 @@ public enum TransferRoute: Equatable, Sendable {
         segments.reserveCapacity(rawSegments.count)
         for rawSegment in rawSegments {
             guard let decoded = rawSegment.removingPercentEncoding, !decoded.isEmpty else {
-                return .notFound(token: nil)
+                return .notFound
             }
             segments.append(decoded)
         }
 
-        let token = segments[0]
-        guard token.count <= 64 else { return .notFound(token: nil) }
-
-        if segments.count == 1 {
-            return .page(token: token, trailingSlash: trailingSlash)
-        }
-
-        switch segments[1] {
+        switch segments[0] {
         case "upload":
-            guard segments.count == 2 else { return .notFound(token: token) }
+            guard segments.count == 1 else { return .notFound }
             let name = query.flatMap { queryValue($0, key: "name") }
-            return .upload(token: token, fileName: name)
+            return .upload(fileName: name)
         case "state":
-            guard segments.count == 2 else { return .notFound(token: token) }
-            return .state(token: token)
+            guard segments.count == 1 else { return .notFound }
+            return .state
         case "library":
-            guard segments.count == 2 else { return .notFound(token: token) }
-            return .library(token: token)
+            guard segments.count == 1 else { return .notFound }
+            return .library
         case "cover":
-            guard segments.count == 3 else { return .notFound(token: token) }
-            return .cover(token: token, id: segments[2])
+            guard segments.count == 2 else { return .notFound }
+            return .cover(id: segments[1])
         case "download":
-            guard segments.count == 3 else { return .notFound(token: token) }
-            return .download(token: token, id: segments[2])
+            guard segments.count == 2 else { return .notFound }
+            return .download(id: segments[1])
         default:
-            return .notFound(token: token)
+            return .notFound
         }
     }
 

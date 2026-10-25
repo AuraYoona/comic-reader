@@ -313,6 +313,24 @@ public func remapPage(_ index: Int, old: [String], new: [String]) -> Int {
     return min(Int((ratio * Double(new.count)).rounded()), new.count - 1)
 }
 
+/// 解压来源压缩包到目标目录（章节并入用）。
+/// 返回写出的文件数；仅支持 ZIP/CBZ（RAR/PDF 不参与同名并入）。
+/// canImport 门控与 installBuiltinReaders 同理：Windows 本地没有 ZIPFoundation
+@discardableResult
+public func extractSourceArchive(sourcePath: String, toDirectory dir: String) throws -> Int {
+    #if canImport(ZIPFoundation)
+    guard archiveFormat(sourcePath) == .zip else {
+        throw SourceError("仅支持 ZIP/CBZ 的自动并入", path: sourcePath)
+    }
+    guard let zip = try readerFor(sourcePath) as? ZipArchiveReader else {
+        throw SourceError("压缩包适配器不支持解压并入", path: sourcePath)
+    }
+    return try zip.extractAll(sourcePath, toDirectory: dir)
+    #else
+    throw SourceError("此平台不支持解压并入", path: sourcePath)
+    #endif
+}
+
 /// 释放全部打开的压缩包句柄（进入后台时调用，对应桌面版的 before-quit）
 public func closeAllSources() {
     sharedArchiveRegistry.releaseAll()
