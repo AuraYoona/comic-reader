@@ -49,6 +49,25 @@ final class TransferRouteTests: XCTestCase {
         XCTAssertEqual(TransferRoute.parse("/download/a%20b"), .download(id: "a b"))
     }
 
+    func testRemoveRoute() {
+        XCTAssertEqual(TransferRoute.parse("/remove/abc-123"), .remove(id: "abc-123"))
+        XCTAssertEqual(TransferRoute.parse("/remove"), .notFound)
+        XCTAssertEqual(TransferRoute.parse("/remove/a/b"), .notFound)
+    }
+
+    func testRenameRoute() {
+        XCTAssertEqual(TransferRoute.parse("/rename/abc-123"), .rename(id: "abc-123", title: nil))
+        XCTAssertEqual(
+            TransferRoute.parse("/rename/abc-123?title=%E6%BC%AB%E7%94%BBa"),
+            .rename(id: "abc-123", title: "漫画a")
+        )
+        XCTAssertEqual(
+            TransferRoute.parse("/rename/abc-123?foo=1&title=x+y"),
+            .rename(id: "abc-123", title: "x y")
+        )
+        XCTAssertEqual(TransferRoute.parse("/rename"), .notFound)
+    }
+
     func testUnknownPaths() {
         XCTAssertEqual(TransferRoute.parse("/nope"), .notFound)
         XCTAssertEqual(TransferRoute.parse("/library/extra"), .notFound)

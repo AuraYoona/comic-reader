@@ -18,10 +18,12 @@ final class LanTransferLibrary: @unchecked Sendable {
 
     private let db: LibraryDatabase
     private let coversDir: String
+    private let comicsDir: String
 
-    init(db: LibraryDatabase, coversDir: String) {
+    init(db: LibraryDatabase, coversDir: String, comicsDir: String) {
         self.db = db
         self.coversDir = coversDir
+        self.comicsDir = comicsDir
     }
 
     func count() -> Int {
@@ -114,6 +116,43 @@ final class LanTransferLibrary: @unchecked Sendable {
             size: Self.fileSize(comic.sourcePath),
             deleteAfterSend: false
         )
+    }
+
+    // MARK: 书架管理（Web 端增删改）
+
+    /// 删除书目：移除记录 + 封面 + 页列表缓存 + App 沙盒内的来源文件
+    /// （上传/导入进来的都是副本，原件仍在电脑上）。压缩包先释放句柄再删文件
+    func remove(id: String) throws {
+        guard let comic = db.getComic(id: id) else {
+            throw SourceError("漫画不存在，可能已被删除")
+        }
+        releaseSource(comic.sourcePath)
+        _ = db.removeComics([id])
+        invalidateComic(id)
+        if let file = comic.coverFile, !file.isEmpty {
+            let name = (file as NSString).lastPathComponent
+            // 防目录穿越：封面文件名必须等于自身 basename（与 cover 一致）
+            if name == file, name != ".", name != ".." {
+                try? FileManager.default.removeItem(
+                    atPath: (coversDir as NSString).appendingPathComponent(name)
+                )
+            }
+        }
+        // 只删除 App 漫画目录内的来源（防外部路径误删）
+        if comic.sourcePath.hasPrefix(comicsDir + "/") {
+            try? FileManager.default.removeItem(atPath: comic.sourcePath)
+        }
+    }
+
+    /// 改书名（记录层重命名，不动来源文件与封面）
+    func rename(id: String, title rawTitle: String) throws {
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            throw SourceError("书名不能为空")
+        }
+        guard db.renameComic(id: id, title: title) != nil else {
+            throw SourceError("漫画不存在，可能已被删除")
+        }
     }
 
     // MARK: 内部
