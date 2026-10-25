@@ -87,7 +87,11 @@ final class LanTransferModel: ObservableObject {
             Task { @MainActor in self?.refreshRecent() }
         }
 
-        let library = LanTransferLibrary(db: db, coversDir: paths.coversDir)
+        let library = LanTransferLibrary(
+            db: db,
+            coversDir: paths.coversDir,
+            comicsDir: paths.comicsDir
+        )
         let server = LanTransferServer(
             deviceName: UIDevice.current.name,
             paths: paths,

@@ -336,6 +336,10 @@ final class LanTransferServer: @unchecked Sendable {
             ?? Data("{\"error\":\"error\"}".utf8)
     }
 
+    private func okJSON() -> Data {
+        Data("{\"ok\":true}".utf8)
+    }
+
     private func stateJSON() -> Data {
         let uploads: [[String: Any]] = statusStore.snapshot().map { item in
             var dict: [String: Any] = [
@@ -488,6 +492,50 @@ extension LanTransferServer: LanTransferConnectionDelegate {
 
         case .upload(let fileName):
             return handleUpload(connection, head: head, fileName: fileName)
+
+        case .remove(let id):
+            guard head.method == "POST" else {
+                return .reject(status: .methodNotAllowed, message: "只支持 POST", headOnly: head.isHeadRequest)
+            }
+            do {
+                try library.remove(id: id)
+                connection.respond(
+                    status: .ok,
+                    contentType: "application/json; charset=utf-8",
+                    body: okJSON(),
+                    headOnly: head.isHeadRequest
+                )
+            } catch {
+                connection.respond(
+                    status: .notFound,
+                    contentType: "application/json; charset=utf-8",
+                    body: errorJSON(error.localizedDescription),
+                    headOnly: head.isHeadRequest
+                )
+            }
+            return .respondNow
+
+        case .rename(let id, let title):
+            guard head.method == "POST" else {
+                return .reject(status: .methodNotAllowed, message: "只支持 POST", headOnly: head.isHeadRequest)
+            }
+            do {
+                try library.rename(id: id, title: title ?? "")
+                connection.respond(
+                    status: .ok,
+                    contentType: "application/json; charset=utf-8",
+                    body: okJSON(),
+                    headOnly: head.isHeadRequest
+                )
+            } catch {
+                connection.respond(
+                    status: .badRequest,
+                    contentType: "application/json; charset=utf-8",
+                    body: errorJSON(error.localizedDescription),
+                    headOnly: head.isHeadRequest
+                )
+            }
+            return .respondNow
 
         case .notFound:
             return .reject(

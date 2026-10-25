@@ -40,6 +40,14 @@ final class TransferWebPageTests: XCTestCase {
         XCTAssertFalse(page.contains("id=\"code\""))
     }
 
+    func testAppPageHasShelfManagementActions() {
+        let page = TransferWebPage.app(deviceName: "i", libraryCount: 1)
+        XCTAssertTrue(page.contains("BASE + 'rename/'"))
+        XCTAssertTrue(page.contains("BASE + 'remove/'"))
+        XCTAssertTrue(page.contains("'改名'"))
+        XCTAssertTrue(page.contains("'删除'"))
+    }
+
     func testHtmlEscape() {
         XCTAssertEqual(
             TransferWebPage.htmlEscape("&<>\"'"),

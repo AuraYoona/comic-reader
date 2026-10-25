@@ -21,6 +21,10 @@ public enum TransferRoute: Equatable, Sendable {
     case cover(id: String)
     /// GET /download/<id> —— 下载原文件 / 文件夹打 zip
     case download(id: String)
+    /// POST /remove/<id> —— 删除书目（含来源文件）
+    case remove(id: String)
+    /// POST /rename/<id>?title=… —— 改书名
+    case rename(id: String, title: String?)
     /// 未知路径
     case notFound
 
@@ -68,6 +72,13 @@ public enum TransferRoute: Equatable, Sendable {
         case "download":
             guard segments.count == 2 else { return .notFound }
             return .download(id: segments[1])
+        case "remove":
+            guard segments.count == 2 else { return .notFound }
+            return .remove(id: segments[1])
+        case "rename":
+            guard segments.count == 2 else { return .notFound }
+            let title = query.flatMap { queryValue($0, key: "title") }
+            return .rename(id: segments[1], title: title)
         default:
             return .notFound
         }

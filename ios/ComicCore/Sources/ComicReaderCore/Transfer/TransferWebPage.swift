@@ -138,8 +138,11 @@ public enum TransferWebPage {
   .dl {
     flex: 0 0 auto; color: var(--accent); text-decoration: none; font-size: 12.5px;
     border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px;
+    background: none; cursor: pointer; font-family: inherit;
   }
   .dl:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .dl.danger { color: var(--bad); }
+  .dl.danger:hover { border-color: var(--bad); background: rgba(220,38,38,.10); }
   .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 26px 8px; }
   .empty.bad { color: var(--bad); }
   footer { max-width: 1000px; margin: 0 auto; padding: 0 18px 40px; color: var(--muted); font-size: 11.5px; line-height: 1.7; }
@@ -177,7 +180,7 @@ public enum TransferWebPage {
 </main>
 <footer>
   传输期间请保持手机上的「局域网传输」页面打开；App 进入后台会自动停止。<br>
-  书架里的文件夹漫画会在下载时自动打包成 ZIP。
+  书架里的文件夹漫画会在下载时自动打包成 ZIP。改名 / 删除会直接作用于手机书架（删除会连同来源文件，原件仍在电脑上）。
 </footer>
 <script>
 (function () {
@@ -614,11 +617,48 @@ public enum TransferWebPage {
       download.href = BASE + 'download/' + encodeURIComponent(entry.id);
       download.setAttribute('download', '');
 
+      var renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'dl';
+      renameBtn.textContent = '改名';
+      renameBtn.addEventListener('click', makeRenameHandler(entry));
+
+      var deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'dl danger';
+      deleteBtn.textContent = '删除';
+      deleteBtn.addEventListener('click', makeDeleteHandler(entry));
+
       row.appendChild(cover);
       row.appendChild(meta);
       row.appendChild(download);
+      row.appendChild(renameBtn);
+      row.appendChild(deleteBtn);
       libList.appendChild(row);
     }
+  }
+
+  function makeRenameHandler(entry) {
+    return function () {
+      var next = window.prompt('把《' + (entry.title || '未命名') + '》改名为：', entry.title || '');
+      if (next === null) return;
+      var trimmed = next.trim();
+      if (!trimmed || trimmed === entry.title) return;
+      fetch(BASE + 'rename/' + encodeURIComponent(entry.id) + '?title=' + encodeURIComponent(trimmed), { method: 'POST' })
+        .then(function (res) { if (!res.ok) throw new Error('rename'); })
+        .then(function () { loadLibrary(); })
+        .catch(function () { window.alert('改名失败，请重试'); });
+    };
+  }
+
+  function makeDeleteHandler(entry) {
+    return function () {
+      if (!window.confirm('删除《' + (entry.title || '未命名') + '》？\n手机上的来源文件会一并删除（原件仍在你的电脑上）。')) return;
+      fetch(BASE + 'remove/' + encodeURIComponent(entry.id), { method: 'POST' })
+        .then(function (res) { if (!res.ok) throw new Error('remove'); })
+        .then(function () { loadLibrary(); })
+        .catch(function () { window.alert('删除失败，请重试'); });
+    };
   }
 
   // ---------- 事件 ----------
