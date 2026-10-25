@@ -176,34 +176,15 @@ final class ShelfStore: ObservableObject {
 
     // MARK: 导入
 
-    /// 导入一批沙盒内路径（文档选择器复制进来之后调用）；返回逐项结果。
-    /// 同名文件夹自动并入既有书目（见 mergeIncomingIntoExisting）
+    /// 导入一批沙盒内路径（文档选择器复制进来之后调用）；返回逐项结果
     @discardableResult
     func importPaths(_ paths: [String]) async -> [ImportResult] {
         guard !importing.active, !paths.isEmpty else { return [] }
         importing = ImportBusy(active: true, label: "正在导入", current: 0, total: paths.count, path: "")
 
-        // 同名并入：电脑端二次导入同名漫画（文件选择器 / 局域网对重名落盘
-        // 都会加「 (n)」后缀）时不再产生重复书目，而是把新内容作为章节合进
-        // 已有那本（目录自动按文件夹名生成）
-        var freshPaths: [String] = []
-        var mergedResults: [ImportResult] = []
-        for (i, path) in paths.enumerated() {
-            importing = ImportBusy(
-                active: true, label: "正在导入",
-                current: i + 1, total: paths.count,
-                path: (path as NSString).lastPathComponent
-            )
-            if let merged = await mergeIncomingIntoExisting(path) {
-                mergedResults.append(merged)
-            } else {
-                freshPaths.append(path)
-            }
-        }
-
         let importer = self.importer
         // 走归档专用队列（importPathsAsync）：detached 会把信号量等待留在协作池
-        let results: [ImportResult] = await importer.importPathsAsync(freshPaths) { info in
+        let results: [ImportResult] = await importer.importPathsAsync(paths) { info in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.importing.current = info.current
@@ -214,173 +195,7 @@ final class ShelfStore: ObservableObject {
         importing = .idle
         comics = db.listComics()
         summarizeImport(results)
-        return mergedResults + results
-    }
-
-    /// 同名并入：去掉「 (n)」后缀后与既有文件夹书目同名的新导入 →
-    /// 把它的内容作为章节搬进既有书目目录，重扫刷新页数并按条目名平移
-    /// 阅读进度。同名子项视为同一章节跳过（重复发送的场景）。
-    /// 两种形态：文件夹（一级子项即章节）；ZIP/CBZ（网页上传的实际形态，
-    /// 解压到临时目录后同规则处理）。RAR/PDF 不参与（提取成本/结构不适合）。
-    /// 返回合成的导入回执（回执缺失会被传输界面标为失败）
-    private func mergeIncomingIntoExisting(_ path: String) async -> ImportResult? {
-        let fm = FileManager.default
-        var isDir: ObjCBool = false
-        let exists = fm.fileExists(atPath: path, isDirectory: &isDir)
-        let name = (path as NSString).lastPathComponent
-        // 扩展名只在压缩包上剥（漫画a.cbz → 漫画a）；文件夹名里的点
-        // 是名字的一部分（「v1.2」剥成「v1」会导致匹配不上、退回重复导入）
-        let stripped = stripDedupSuffix(
-            isDir.boolValue ? name : (name as NSString).deletingPathExtension
-        )
-        // 压缩包来源：书名匹配时把扩展名去掉再比（漫画a 01.cbz → 漫画a 01）；
-        // 匹配不上则走普通导入
-        guard exists, !stripped.isEmpty,
-              let existing = comics.first(where: {
-                  $0.sourceType == .folder
-                      && (($0.sourcePath as NSString).lastPathComponent == stripped || $0.title == stripped)
-              })
-        else { return nil }
-        // 既有书目目录不在了（来源丢失）→ 按普通导入处理
-        guard fm.fileExists(atPath: existing.sourcePath) else { return nil }
-
-        // 归一化出「一级子项（章节）列表」：文件夹直接列；压缩包解压到临时目录
-        let staging: String
-        if isDir.boolValue {
-            staging = path
-        } else {
-            guard archiveFormat(path) == .zip else { return nil } // RAR/PDF：普通导入
-            staging = NSTemporaryDirectory() + "/merge-\(UUID().uuidString)"
-            let sourcePath = path
-            do {
-                let written = try await runOnArchiveQueue {
-                    try extractSourceArchive(sourcePath: sourcePath, toDirectory: staging)
-                }
-                guard written > 0 else {
-                    try? fm.removeItem(atPath: staging)
-                    return nil
-                }
-            } catch {
-                try? fm.removeItem(atPath: staging)
-                toasts.show(.error, "解压「\(name)」失败：\(error.localizedDescription)")
-                return nil
-            }
-        }
-        defer { if staging != path { try? fm.removeItem(atPath: staging) } }
-        guard let children = try? fm.contentsOfDirectory(atPath: staging).sorted(), !children.isEmpty else {
-            return nil
-        }
-
-        var movedCount = 0
-        var skippedCount = 0
-        do {
-            for child in children {
-                let dest = existing.sourcePath + "/" + child
-                if fm.fileExists(atPath: dest) {
-                    skippedCount += 1 // 同名子项：视为同一章节，保留既有
-                    continue
-                }
-                if (try? fm.moveItem(atPath: staging + "/" + child, toPath: dest)) != nil {
-                    movedCount += 1
-                } else {
-                    try fm.copyItem(atPath: staging + "/" + child, toPath: dest)
-                    movedCount += 1
-                }
-            }
-            // 搬空的落盘目录清掉；压缩包原件一并删除（内容已并入）
-            if let left = try? fm.contentsOfDirectory(atPath: path), left.isEmpty {
-                try? fm.removeItem(atPath: path)
-            } else if !isDir.boolValue {
-                try? fm.removeItem(atPath: path)
-            }
-        } catch {
-            toasts.show(.error, "并入《\(existing.title)》失败：\(error.localizedDescription)")
-            return nil
-        }
-        guard movedCount > 0 || skippedCount > 0 else { return nil }
-
-        // 重扫既有书目：页数刷新；新章节插在前面时按条目名平移进度
-        let oldList = (try? getPageList(existing)) ?? []
-        let oldPage = existing.lastReadPage
-        invalidateComic(existing.id)
-        var refreshed = existing
-        if let newList = try? await scanSourceAsync(sourceType: .folder, sourcePath: existing.sourcePath),
-           !newList.isEmpty {
-            refreshed = db.setPageCount(id: existing.id, pageCount: newList.count) ?? existing
-            if oldPage > 0, !oldList.isEmpty {
-                let mapped = remapPage(oldPage, old: oldList, new: newList)
-                if mapped != oldPage {
-                    refreshed = db.updateProgress(
-                        id: existing.id,
-                        patch: ProgressPatch(lastReadPage: mapped)
-                    ) ?? refreshed
-                }
-            }
-        }
-
-        toasts.show(
-            .success,
-            movedCount > 0
-                ? "《\(existing.title)》新增 \(movedCount) 个章节"
-                : "《\(existing.title)》章节已存在，未重复并入"
-        )
-        return ImportResult(
-            path: path,
-            status: .imported,
-            comic: refreshed,
-            reason: movedCount > 0 ? "并入同名书目" : "章节已存在"
-        )
-    }
-
-    /// 批量导入：一个根目录下每个子文件夹 / 压缩包各算一本（对齐 expandBatchRoot）
-    func importBatchRoot(_ root: String) async {
-        let items = importer.expandBatchRoot(root)
-        guard let items, !items.isEmpty else {
-            toasts.show(.error, "这个目录里没有可导入的漫画")
-            return
-        }
-        _ = db.addLibraryRoot(root)
-        await importPaths(items)
-    }
-
-    /// 启动 / 手动扫描库目录：新增的漫画自动上架
-    func scanRoots(silent: Bool = false) async {
-        let importer = self.importer
-        let result: ScanRootsResult = await importer.scanLibraryRootsAsync()
-
-        comics = db.listComics()
-        if !result.added.isEmpty {
-            toasts.show(.success, "新上架 \(result.added.count) 本")
-        } else if !silent {
-            if result.roots == 0 {
-                toasts.show(.info, "还没有库目录，先批量导入一个目录吧")
-            } else {
-                toasts.show(.info, "库目录里没有新漫画")
-            }
-        }
-        if !result.unreadable.isEmpty {
-            toasts.show(.error, "有 \(result.unreadable.count) 个库目录读不了")
-        }
-    }
-
-    private func summarizeImport(_ results: [ImportResult]) {
-        let imported = results.filter { $0.status == .imported }.count
-        let skipped = results.filter { $0.status == .skipped }.count
-        let failed = results.filter { $0.status == .failed }
-
-        if imported > 0 {
-            toasts.show(.success, "已导入 \(imported) 本")
-        }
-        if skipped > 0 {
-            toasts.show(.info, "跳过 \(skipped) 本（已在书架或重复选择）")
-        }
-        // 失败原因最多提示 3 条（对齐 library.ts 103-121），其余合并展示
-        for item in failed.prefix(3) {
-            toasts.show(.error, item.reason ?? "导入失败")
-        }
-        if failed.count > 3 {
-            toasts.show(.error, "另有 \(failed.count - 3) 本导入失败")
-        }
+        return results
     }
 
     // MARK: 单本操作

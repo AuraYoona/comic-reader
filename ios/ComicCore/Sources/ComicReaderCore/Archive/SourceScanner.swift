@@ -289,48 +289,6 @@ public func deriveChapters(from pages: [String]) -> [ComicChapter] {
     return out.count >= 2 ? out : []
 }
 
-/// 去掉「 (2)」式去重后缀（导入落盘重名时文件选择器 / 局域网都会自动追加；
-/// 判断「同名并入既有书目」时用它还原原始名字）
-public func stripDedupSuffix(_ name: String) -> String {
-    var s = name
-    while let r = s.range(of: #" \([0-9]+\)$"#, options: .regularExpression) {
-        s = String(s[..<r.lowerBound])
-    }
-    return s
-}
-
-/// 页列表变化（同名并入新章节）后把旧页码映射到新页码：优先按条目名找回
-/// 同一页（新章节插在前面时页码整体平移）；条目消失则按比例近似，最后夹进范围
-public func remapPage(_ index: Int, old: [String], new: [String]) -> Int {
-    guard !new.isEmpty else { return 0 }
-    guard index >= 0, index < old.count else {
-        return min(max(0, index), new.count - 1)
-    }
-    if let to = new.firstIndex(of: old[index]) {
-        return to
-    }
-    let ratio = Double(index) / Double(old.count)
-    return min(Int((ratio * Double(new.count)).rounded()), new.count - 1)
-}
-
-/// 解压来源压缩包到目标目录（章节并入用）。
-/// 返回写出的文件数；仅支持 ZIP/CBZ（RAR/PDF 不参与同名并入）。
-/// canImport 门控与 installBuiltinReaders 同理：Windows 本地没有 ZIPFoundation
-@discardableResult
-public func extractSourceArchive(sourcePath: String, toDirectory dir: String) throws -> Int {
-    #if canImport(ZIPFoundation)
-    guard archiveFormat(sourcePath) == .zip else {
-        throw SourceError("仅支持 ZIP/CBZ 的自动并入", path: sourcePath)
-    }
-    guard let zip = try readerFor(sourcePath) as? ZipArchiveReader else {
-        throw SourceError("压缩包适配器不支持解压并入", path: sourcePath)
-    }
-    return try zip.extractAll(sourcePath, toDirectory: dir)
-    #else
-    throw SourceError("此平台不支持解压并入", path: sourcePath)
-    #endif
-}
-
 /// 释放全部打开的压缩包句柄（进入后台时调用，对应桌面版的 before-quit）
 public func closeAllSources() {
     sharedArchiveRegistry.releaseAll()
