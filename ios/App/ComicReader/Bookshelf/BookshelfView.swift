@@ -31,10 +31,9 @@ struct BookshelfView: View {
                 onOpenSettings: { sheet = .settings },
                 onLanTransfer: { sheet = .lanTransfer }
             )
-            Divider().opacity(0.5)
             content
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(.ultraThinMaterial)
         .overlay(alignment: .bottom) { selectionBar }
         .overlay(alignment: .bottomTrailing) { importProgressCard }
         .fileImporter(

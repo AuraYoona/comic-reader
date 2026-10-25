@@ -560,6 +560,8 @@ struct ChapterSheet: View {
             }
             .navigationTitle("目录")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden)
+            .background(.ultraThinMaterial)
         }
     }
 
