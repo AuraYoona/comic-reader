@@ -30,6 +30,9 @@ struct SettingsView: View {
                 extensionsSection
                 aboutSection
             }
+            // 白色分组卡浮在磨砂玻璃上（隐藏系统格纹底）
+            .scrollContentBackground(.hidden)
+            .background(.ultraThinMaterial)
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

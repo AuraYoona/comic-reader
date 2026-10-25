@@ -21,6 +21,9 @@ public final class PdfArchiveReader: ArchiveReader {
 
     private final class Handle {
         let document: PDFDocument
+        /// PDFDocument/PDFPage 的绘制未声明线程安全；当前页与预取并发渲染
+        /// 共享同一文档时须串行化（对照 ZipArchiveReader 的 ioLock）
+        let ioLock = NSLock()
         init(document: PDFDocument) { self.document = document }
     }
 
@@ -74,6 +77,8 @@ public final class PdfArchiveReader: ArchiveReader {
             throw SourceError("PDF 中找不到这一页：\(entry)", path: file)
         }
         let handle = try awaitBlocking { try await self.cache.acquire(file) }
+        handle.ioLock.lock()
+        defer { handle.ioLock.unlock() }
         guard let page = handle.document.page(at: index) else {
             throw SourceError("PDF 中找不到这一页：\(entry)", path: file)
         }

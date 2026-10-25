@@ -31,11 +31,31 @@ struct PageImageView: View {
     /// 慢载提示延迟（对齐 PagedView.tsx SLOW_LOAD_HINT_MS = 200）
     private static let slowLoadHintNs: UInt64 = 200 * 1_000_000
 
+    /// 解码目标尺寸：显示与预取必须共用同一公式——缓存键含解码尺寸
+    /// （PageProvider.pageKey），公式、地板值或倍率任何一处漂移都会让
+    /// 预取条目永远 miss，白做一遍还挤占 32 槽 LRU
+    static func decodeTargetSize(pointWidth: CGFloat, scale: Double) -> Int {
+        min(4096, max(1024, Int(pointWidth * CGFloat(max(scale, 1)) * UIScreen.main.scale * 2)))
+    }
+
     var body: some View {
         content
             .task(id: "\(comic.id)-\(index)-\(attempt)") {
                 await load()
             }
+            // 单页模式下本视图结构位置固定、仅 index 变化，SwiftUI 会保留视图身份，
+            // @State 全部残留——必须显式重置，否则翻页显示旧图、失败面板被旧图掩盖
+            .onChange(of: index) { _ in
+                resetForNewPage()
+            }
+    }
+
+    /// 翻页 / 换页时的状态复位（.task(id:) 只重启任务，不重置 @State）
+    private func resetForNewPage() {
+        image = nil
+        failed = false
+        showSlowLoad = false
+        cropInsets = nil
     }
 
     @ViewBuilder
@@ -52,6 +72,10 @@ struct PageImageView: View {
                         .controlSize(.regular)
                 }
             }
+            .frame(maxWidth: .infinity)
+            // 加载中也占住槽位高度：无此约束时 LazyVStack 的无界高度提案会让
+            // 槽位塌缩为 0（占位高 → 0 → 真实高 的两级跳变是滚动抖动主源）
+            .frame(height: max(boxSize.height, 120), alignment: .top)
         }
     }
 
@@ -159,6 +183,11 @@ struct PageImageView: View {
 
     private func load() async {
         showSlowLoad = false
+        // 同步快路径：命中解码缓存直接上屏，重挂载不闪占位（高度不塌缩）
+        if image == nil {
+            let cached = Self.decodeTargetSize(pointWidth: boxSize.width, scale: scale)
+            image = pages.cachedPage(comic: comic, index: index, maxPixelSize: cached)
+        }
         let slowTask = Task { [self] in
             try? await Task.sleep(nanoseconds: Self.slowLoadHintNs)
             guard !Task.isCancelled else { return }
@@ -168,18 +197,22 @@ struct PageImageView: View {
         }
         defer { slowTask.cancel() }
 
-        // 解码尺寸：按视口宽度 × 显示倍率，留一点余量给缩放
-        let scaleFactor = UIScreen.main.scale
-        let target = max(1024, Int(boxSize.width * CGFloat(max(scale, 1)) * scaleFactor * 2))
-        let decoded = await pages.page(comic: comic, index: index, maxPixelSize: min(target, 4096))
+        // 解码尺寸：与预取共用 decodeTargetSize（见其注释）
+        let target = Self.decodeTargetSize(pointWidth: boxSize.width, scale: scale)
+        let decoded = await pages.page(comic: comic, index: index, maxPixelSize: target)
 
+        // .task(id:) 在换页时会取消旧任务：被取消的任务不得再写状态，
+        // 否则旧页晚到的结果会覆盖新页的画面（包括熄灭新页的慢载指示）
+        guard !Task.isCancelled else { return }
         showSlowLoad = false
         if let decoded {
             image = decoded
             onNatural?(Double(decoded.size.width), Double(decoded.size.height))
             onSettled?()
             if autoCrop {
-                cropInsets = await pages.cropInsets(comic: comic, index: index)
+                let insets = await pages.cropInsets(comic: comic, index: index)
+                guard !Task.isCancelled else { return }
+                cropInsets = insets
             }
         } else {
             failed = true

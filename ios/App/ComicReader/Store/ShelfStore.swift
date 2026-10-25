@@ -84,6 +84,13 @@ final class ShelfStore: ObservableObject {
         verifySources(force: true)
     }
 
+    /// 阅读器关闭后的轻量刷新：只重读列表。卡片的进度 / 未读徽章读的是
+    /// shelf.comics 快照——阅读期间的 lastReadAt 与进度写进了 DB，
+    /// 列表不重载就会一直显示旧状态（「读完仍显示未读」）
+    func refreshAfterReading() {
+        comics = db.listComics()
+    }
+
     /// 来源存在性校验（8s 节流；后台批量 stat）
     func verifySources(force: Bool = false) {
         let t = now()
@@ -176,15 +183,14 @@ final class ShelfStore: ObservableObject {
         importing = ImportBusy(active: true, label: "正在导入", current: 0, total: paths.count, path: "")
 
         let importer = self.importer
-        let results: [ImportResult] = await Task.detached(priority: .userInitiated) {
-            importer.importPaths(paths) { info in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.importing.current = info.current
-                    self.importing.path = (info.path as NSString).lastPathComponent
-                }
+        // 走归档专用队列（importPathsAsync）：detached 会把信号量等待留在协作池
+        let results: [ImportResult] = await importer.importPathsAsync(paths) { info in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.importing.current = info.current
+                self.importing.path = (info.path as NSString).lastPathComponent
             }
-        }.value
+        }
 
         importing = .idle
         comics = db.listComics()
@@ -192,7 +198,6 @@ final class ShelfStore: ObservableObject {
         return results
     }
 
-    /// 批量导入：一个根目录下每个子文件夹 / 压缩包各算一本（对齐 expandBatchRoot）
     func importBatchRoot(_ root: String) async {
         let items = importer.expandBatchRoot(root)
         guard let items, !items.isEmpty else {
@@ -206,9 +211,7 @@ final class ShelfStore: ObservableObject {
     /// 启动 / 手动扫描库目录：新增的漫画自动上架
     func scanRoots(silent: Bool = false) async {
         let importer = self.importer
-        let result: ScanRootsResult = await Task.detached(priority: .utility) {
-            importer.scanLibraryRoots()
-        }.value
+        let result: ScanRootsResult = await importer.scanLibraryRootsAsync()
 
         comics = db.listComics()
         if !result.added.isEmpty {
@@ -269,6 +272,113 @@ final class ShelfStore: ObservableObject {
         patch(updated)
     }
 
+    // MARK: 合并（同名多卷 → 一本带章节目录）
+
+    /// 书名 → 安全文件夹名（去掉路径非法字符与控制符）
+    private func folderName(for title: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/\\:?*\"<>|")
+            .union(.controlCharacters)
+            .union(.newlines)
+        let cleaned = title.components(separatedBy: invalid)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return cleaned.isEmpty ? "合并漫画" : cleaned
+    }
+
+    /// 多选合并：把各卷的源文件夹收进 Comics/<书名>/ 下，重新导入为一本——
+    /// 章节目录按文件夹名自动生成（deriveChapters）。仅支持 folder 来源
+    /// （压缩包无法并入文件夹结构）；App 漫画目录内的卷移动，外部来源复制。
+    /// 阅读进度取「最近读的一卷」，按文件夹自然排序换算到全书偏移
+    func mergeSelected() async {
+        let ids = Array(selectedIds)
+        let picked = comics.filter { ids.contains($0.id) }
+        guard picked.count >= 2 else {
+            toasts.show(.error, "至少选择两本才能合并")
+            return
+        }
+        guard picked.allSatisfy({ $0.sourceType == .folder }) else {
+            toasts.show(.error, "仅支持文件夹来源的合并（压缩包请先解压导入）")
+            return
+        }
+        guard !busy else { return }
+        busy = true
+        importing = ImportBusy(active: true, label: "正在合并", current: 0, total: picked.count, path: "")
+        defer {
+            busy = false
+            importing = .idle
+        }
+
+        let fm = FileManager.default
+        let root = AppPaths.live().comicsDir
+        var parent = root + "/" + folderName(for: picked[0].title)
+        var suffix = 2
+        while fm.fileExists(atPath: parent) {
+            parent = root + "/" + folderName(for: picked[0].title) + " (\(suffix))"
+            suffix += 1
+        }
+
+        do {
+            try fm.createDirectory(atPath: parent, withIntermediateDirectories: true)
+
+            // 逐卷：漫画目录内移动、外部复制；文件夹重名递增避让
+            var placed: [(comic: Comic, folder: String)] = []
+            for (i, c) in picked.enumerated() {
+                importing = ImportBusy(
+                    active: true, label: "正在合并",
+                    current: i + 1, total: picked.count, path: c.title
+                )
+                let base = (c.sourcePath as NSString).lastPathComponent
+                var name = base
+                var dest = parent + "/" + name
+                var n = 2
+                while fm.fileExists(atPath: dest) {
+                    name = base + " (\(n))"
+                    dest = parent + "/" + name
+                    n += 1
+                }
+                if c.sourcePath.hasPrefix(root + "/") {
+                    try fm.moveItem(atPath: c.sourcePath, toPath: dest)
+                } else {
+                    try fm.copyItem(atPath: c.sourcePath, toPath: dest)
+                }
+                placed.append((c, name))
+            }
+
+            // 重新导入父目录为一本
+            let results = await importer.importPathsAsync([parent])
+            guard let merged = results.first(where: { $0.status == .imported })?.comic else {
+                throw SourceError("合并后的目录导入失败")
+            }
+
+            // 进度：最近读的一卷按自然序换算全书偏移，并沿用其阅读偏好
+            if let anchor = placed.max(by: {
+                ($0.comic.lastReadAt ?? 0) < ($1.comic.lastReadAt ?? 0)
+            }), anchor.comic.lastReadAt != nil {
+                let anchorFolder = anchor.folder
+                var offset = anchor.comic.lastReadPage
+                for p in placed where naturalCompare(p.folder, anchorFolder) < 0 {
+                    offset += p.comic.pageCount
+                }
+                _ = db.updateProgress(
+                    id: merged.id,
+                    patch: ProgressPatch(
+                        lastReadPage: min(offset, max(0, merged.pageCount - 1)),
+                        reader: anchor.comic.reader
+                    )
+                )
+            }
+
+            // 移除旧书目（连带封面与页列表缓存），收尾
+            remove(placed.map(\.comic.id))
+            comics = db.listComics()
+            toasts.show(.success, "已合并为《\(merged.title)》（\(placed.count) 卷）")
+        } catch {
+            // 中途失败：已搬进目标目录的卷留在原地（尚未导入、无书目记录）；
+            // 不做反向回滚——反向移动同样可能失败且会覆盖避让名
+            toasts.show(.error, "合并失败：\((error as NSError).localizedDescription)")
+        }
+    }
+
     /// 重新扫描（刷新页数与封面；对齐 ipc.ts comic:rescan-many）
     func rescan(_ ids: [String]) async {
         guard !busy, !ids.isEmpty else { return }
@@ -281,12 +391,12 @@ final class ShelfStore: ObservableObject {
             guard let c = db.getComic(id: id) else { continue }
             invalidateComic(id)
             do {
-                let list = try scanSource(sourceType: c.sourceType, sourcePath: c.sourcePath)
+                let list = try await scanSourceAsync(sourceType: c.sourceType, sourcePath: c.sourcePath)
                 guard !list.isEmpty else {
                     throw SourceError("这本漫画里没有页面")
                 }
                 var u = db.setPageCount(id: id, pageCount: list.count) ?? c
-                if let regenerated = covers.regenerateCover(for: u, db: db, now: now()) {
+                if let regenerated = await covers.regenerateCover(for: u, db: db, now: now()) {
                     u = regenerated
                 }
                 updated.append(u)

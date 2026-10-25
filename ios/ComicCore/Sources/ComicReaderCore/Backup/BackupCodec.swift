@@ -241,31 +241,51 @@ public enum BackupCodec {
         let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("backup-\(UUID().uuidString).zip")
         defer { try? FileManager.default.removeItem(at: tmpURL) }
+        try createZip(ofDirectory: dir, at: tmpURL.path)
+        return try Data(contentsOf: tmpURL)
+    }
 
-        let archive = try Archive(url: tmpURL, accessMode: .create)
+    /// 把一个目录写成 zip 文件（局域网下载文件夹漫画时直接流式发送临时文件，
+    /// 避免把整本漫画读进内存）。storeOnly = true 时只存储不压缩——图片本身
+    /// 已经压缩过，deflate 只会白耗 CPU。
+    public static func createZip(
+        ofDirectory dir: String,
+        at destPath: String,
+        storeOnly: Bool = false
+    ) throws {
         let fm = FileManager.default
+        let destURL = URL(fileURLWithPath: destPath)
+        if fm.fileExists(atPath: destPath) {
+            try? fm.removeItem(at: destURL)
+        }
+
+        let archive = try Archive(url: destURL, accessMode: .create)
         // macOS 上 /var 是 /private/var 的符号链接：枚举器返回真实路径，
         // 直接做字符串前缀替换会得到绝对路径（zip 条目非法）——两边都解析符号链接，
         // 再按 pathComponents 计算相对路径
         let root = URL(fileURLWithPath: dir).resolvingSymlinksInPath()
         let rootComponents = root.pathComponents
         guard let enumerator = fm.enumerator(
-            at: root, includingPropertiesForKeys: [.isDirectoryKey], options: []
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+            options: []
         ) else {
-            throw SourceError("备份目录不可读")
+            throw SourceError("目录不可读")
         }
 
         for case let fileURL as URL in enumerator {
-            let values = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
-            guard values.isDirectory != true else { continue }
+            let values = try fileURL.resourceValues(
+                forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+            )
+            // 不跟随符号链接：避免把沙盒外/指向目录的链接内容塞进 zip
+            guard values.isDirectory != true, values.isSymbolicLink != true else { continue }
             let components = fileURL.resolvingSymlinksInPath().pathComponents
             guard components.count > rootComponents.count else { continue }
             let rel = components.dropFirst(rootComponents.count).joined(separator: "/")
-            try archive.addEntry(
-                with: rel, fileURL: fileURL, compressionMethod: .deflate
-            )
+            // 压缩方法由参数类型推导（ZIPFoundation 0.9.19 的类型名是 CompressionMethod，
+            // 不要显式写出，避免与系统 Compression 框架歧义）
+            try archive.addEntry(with: rel, fileURL: fileURL, compressionMethod: storeOnly ? .none : .deflate)
         }
-        return try Data(contentsOf: tmpURL)
     }
 
     /// zip 解包到目标目录（须不存在或为空）；拒绝绝对路径与 .. 穿越

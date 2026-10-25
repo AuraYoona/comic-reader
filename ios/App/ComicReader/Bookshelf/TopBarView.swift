@@ -14,6 +14,7 @@ struct TopBarView: View {
     let onImportFiles: () -> Void
     let onImportBatch: () -> Void
     let onOpenSettings: () -> Void
+    let onLanTransfer: () -> Void
 
     @FocusState private var searchFocused: Bool
 
@@ -26,7 +27,7 @@ struct TopBarView: View {
         .padding(.horizontal, 16)
         .padding(.top, 6)
         .padding(.bottom, 10)
-        .background(.bar)
+        .glassHeader()
     }
 
     // MARK: 标题行
@@ -49,6 +50,16 @@ struct TopBarView: View {
                     .foregroundStyle(isSelecting ? Color.accentColor : .secondary)
             }
             .buttonStyle(.plain)
+
+            Button {
+                onLanTransfer()
+            } label: {
+                Image(systemName: "wifi")
+                    .font(.system(size: 16))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("局域网传输")
 
             Button {
                 cycleTheme()
@@ -228,6 +239,12 @@ struct TopBarView: View {
                 onImportBatch()
             } label: {
                 Label("批量导入子文件夹…", systemImage: "square.grid.2x2")
+            }
+            Divider()
+            Button {
+                onLanTransfer()
+            } label: {
+                Label("局域网传输（Wi-Fi）…", systemImage: "wifi")
             }
         } label: {
             HStack(spacing: 5) {

@@ -13,7 +13,15 @@ struct SelectionBarView: View {
     let onRemove: () -> Void
     let onExit: () -> Void
 
+    @State private var confirmMerge = false
+
     private var selectedIds: [String] { Array(shelf.selectedIds) }
+
+    /// 合并仅对「≥2 本且全部是文件夹来源」的多选开放
+    private var canMerge: Bool {
+        let picked = shelf.comics.filter { shelf.selectedIds.contains($0.id) }
+        return picked.count >= 2 && picked.allSatisfy { $0.sourceType == .folder }
+    }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -52,6 +60,30 @@ struct SelectionBarView: View {
             .disabled(shelf.busy)
             .opacity(shelf.busy ? 0.4 : 1)
 
+            if canMerge {
+                Button {
+                    confirmMerge = true
+                } label: {
+                    Text("合并…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .disabled(shelf.busy)
+                .confirmationDialog(
+                    "合并选中的 \(shelf.selectedIds.count) 本？",
+                    isPresented: $confirmMerge,
+                    titleVisibility: .visible
+                ) {
+                    Button("合并成一本") {
+                        Task { await shelf.mergeSelected() }
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    Text("各卷文件夹会收进同一本书下（目录按文件夹名自动生成），原书目移除；最近读到的一卷会续上进度。")
+                }
+            }
+
             Button {
                 onRemove()
             } label: {
@@ -75,11 +107,7 @@ struct SelectionBarView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        .background(
-            Capsule()
-                .fill(.regularMaterial)
-                .shadow(color: .black.opacity(0.22), radius: 16, y: 6)
-        )
+        .liquidGlass(in: Capsule(), shadowOpacity: 0.22)
         .padding(.horizontal, 14)
         .padding(.bottom, 14)
     }

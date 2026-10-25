@@ -32,48 +32,73 @@ final class ReaderStore: ObservableObject {
     @Published private(set) var autoTurn = false
     @Published private(set) var thumbStrip = false
     @Published private(set) var endHint = false
+    /// 章节目录（分章节文件夹的漫画；章节数 < 2 时为空）
+    @Published private(set) var chapters: [ComicChapter] = []
 
     private let db: LibraryDatabase
     private let settings: SettingsStore
     private let pages: PageProvider
+    private let meta: PageMetaStore
     private var persistTask: Task<Void, Never>?
     private var endHintTask: Task<Void, Never>?
+    /// 打开会话号：open 有了 await 点之后，close 后立即重开时
+    /// 旧扫描凭它作废（否则旧结果会把新会话的状态覆盖回去）
+    private var openEpoch = 0
 
-    init(db: LibraryDatabase, settings: SettingsStore, pages: PageProvider) {
+    /// 每页宽高比（h/w）——滚动模式占位高度与页内恢复的依据，
+    /// 读过的页跨会话记忆（sidecar 持久化）
+    @Published private(set) var pageRatios: [Int: Double] = [:]
+    /// 滚动模式重开时的页内恢复分数（一次性，视图取走即清；
+    /// 仅当目标页比率已知时非 nil——估算高×分数会错位数屏）
+    private(set) var restoreFraction: Double?
+    /// 滚动模式最近一次上报的页内位置（persistNow 时写入 sidecar）
+    private var lastScrollFraction: Double?
+
+    init(db: LibraryDatabase, settings: SettingsStore, pages: PageProvider, meta: PageMetaStore) {
         self.db = db
         self.settings = settings
         self.pages = pages
+        self.meta = meta
     }
 
     // MARK: 打开 / 关闭
 
     /// 打开漫画：重新扫描来源 → 刷新页数 → 解析偏好（按本覆盖全局）→ 定位到上次页码
     func open(id: String, fromStart: Bool = false) async {
-        guard !opening else { return }
+        // 同一会话内的重复 open（连点）忽略；但上一次还在扫描、且已被 close()
+        // 的场景必须放行——否则「退出后马上再点开」会被静默丢弃
+        guard !opening || !active else { return }
         opening = true
+        openEpoch &+= 1
+        let epoch = openEpoch
+        defer { if epoch == openEpoch { opening = false } }
         error = nil
         active = true
-        defer { opening = false }
 
         guard let stored = db.getComic(id: id) else {
             error = "漫画记录不存在"
             return
         }
 
-        // 强制刷新页列表（对齐桌面 comic:open 的 rescan）
+        // 强制刷新页列表（对齐桌面 comic:open 的 rescan）。扫描走专用队列：
+        // 压缩包的 list() 内部经 awaitBlocking 信号量等待，在主线程上同步跑
+        // 会把 UI 整个冻住（最坏 30 秒超时）
         invalidateComic(id)
         let list: [String]
         do {
-            list = try scanSource(sourceType: stored.sourceType, sourcePath: stored.sourcePath)
+            list = try await scanSourceAsync(sourceType: stored.sourceType, sourcePath: stored.sourcePath)
         } catch let e as SourceError {
-            error = e.message
+            if epoch == openEpoch { error = e.message }
             return
         } catch {
             // 注意：裸 catch 会隐式绑定名为 error 的局部常量，遮蔽同名属性；
             // 必须用 self. 前缀才能写到属性上
-            self.error = "打开失败，文件可能已损坏"
+            if epoch == openEpoch { self.error = "打开失败，文件可能已损坏" }
             return
         }
+        // 扫描等待期间会话可能已被 close() 或被新的 open 接管：放弃，
+        // 避免把清空/新会话的状态覆盖回去
+        guard epoch == openEpoch, active else { return }
         guard !list.isEmpty else {
             error = "这本漫画里没有页面"
             return
@@ -87,6 +112,8 @@ final class ReaderStore: ObservableObject {
         pageCount = list.count
         bookmarks = updated.bookmarks
         widePages = []
+        // 章节目录：从页面条目路径推导（首个路径段 = 章节名；< 2 章为空）
+        chapters = deriveChapters(from: list)
 
         // 偏好解析：按本覆盖全局（对齐 reader.ts open 151-187）
         let s = settings.settings
@@ -104,12 +131,24 @@ final class ReaderStore: ObservableObject {
         page = fromStart ? 0 : min(max(0, updated.lastReadPage), list.count - 1)
 
         pages.clearCropCache()
+
+        // 页元数据：载入比率表（跨会话高度学习），截断越界键；
+        // 页内分数只在滚动模式且目标页比率已知时生效（否则退化为页顶恢复）
+        let m = meta.load(comicId: id)
+        meta.truncate(pageCount: list.count)
+        pageRatios = m.ratios
+        restoreFraction = (mode == .scroll && !fromStart)
+            ? ((m.scrollFraction != nil && m.ratios[page] != nil) ? m.scrollFraction : nil)
+            : nil
+        lastScrollFraction = nil
+
         schedulePersist()
     }
 
     /// 返回书架：先落进度，再清缓存（对齐 reader.ts close 189-210）
     func close() {
         flushPersist()
+        meta.flushSync()
         endHintTask?.cancel()
         endHint = false
         autoTurn = false
@@ -118,7 +157,34 @@ final class ReaderStore: ObservableObject {
         comic = nil
         page = 0
         pageCount = 0
+        chapters = []
+        pageRatios = [:]
+        restoreFraction = nil
+        lastScrollFraction = nil
         pages.clearAll()
+    }
+
+    // MARK: 页元数据（阶段2：宽高比学习 / 页内进度）
+
+    /// 视图回报某页的真实宽高比（h/w）：更新内存表并写入 sidecar
+    /// （变化超过阈值才算，避免重复标脏）
+    func applyRatio(_ index: Int, ratio: Double) {
+        guard ratio > 0, ratio.isFinite else { return }
+        if let old = pageRatios[index], abs(old - ratio) <= 0.01 { return }
+        pageRatios[index] = ratio
+        meta.setRatio(index: index, ratio: ratio)
+    }
+
+    /// 滚动模式：视口在当前页内的位置（0..<1，视图节流上报）
+    func updateScrollFraction(_ fraction: Double) {
+        lastScrollFraction = fraction
+    }
+
+    /// 取走一次性页内恢复分数（视图挂载时消费）
+    func takeRestoreFraction() -> Double? {
+        let f = restoreFraction
+        restoreFraction = nil
+        return f
     }
 
     // MARK: 翻页
@@ -323,6 +389,10 @@ final class ReaderStore: ObservableObject {
             autoScroll: autoScroll
         )
         _ = db.updateProgress(id: comic.id, patch: ProgressPatch(lastReadPage: page, reader: prefs))
+        // 滚动模式的页内进度双写进 sidecar（页码仍在 library.json，跨端语义不变）
+        if mode == .scroll {
+            meta.setScroll(page: page, fraction: lastScrollFraction ?? 0)
+        }
         // 刷新快照供界面使用（书架卡片进度等）
         if let refreshed = db.getComic(id: comic.id) {
             self.comic = refreshed

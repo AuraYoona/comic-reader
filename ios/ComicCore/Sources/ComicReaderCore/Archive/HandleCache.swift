@@ -49,7 +49,9 @@ public final class HandleCache<T>: @unchecked Sendable {
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + options.idleSeconds)
         timer.setEventHandler { [weak self] in
-            self?.release(key)
+            // handler 已在本队列上执行，必须直接调 releaseLocked；
+            // 走 release 的 queue.sync 会向自身串行队列同步重入，永久死锁
+            self?.releaseLocked(key)
         }
         timer.resume()
         return timer

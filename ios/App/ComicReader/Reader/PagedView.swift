@@ -50,6 +50,19 @@ struct PagedView: View {
             // 每次翻页预取邻页（对齐 PagedView.tsx 的 prefetch 邻域）
             reader.prefetchNeighbors(maxPixelSize: prefetchPixelSize)
         }
+        .onChange(of: reader.mode) { _ in
+            // 单↔双切换改变槽宽，缓存键含尺寸——按新尺寸重取邻页
+            reader.prefetchNeighbors(maxPixelSize: prefetchPixelSize)
+        }
+        .onChange(of: reader.scale) { _ in
+            // 捏合落定后 reader.scale 变化，解码目标随倍率变化（对齐桌面版
+            // 预取依赖 [page, double, ...] 全量重取的语义）
+            reader.prefetchNeighbors(maxPixelSize: prefetchPixelSize)
+        }
+        .onChange(of: viewportSize) { _ in
+            // 旋转 / 分屏改变槽宽，同样按新尺寸重取
+            reader.prefetchNeighbors(maxPixelSize: prefetchPixelSize)
+        }
     }
 
     private var effectiveScale: Double {
@@ -97,6 +110,8 @@ struct PagedView: View {
             autoCrop: reader.autoCrop,
             onNatural: { w, h in
                 reader.markWide(index, isWide: isWideSize(width: w, height: h))
+                // 宽高比跨会话学习（滚动模式的占位高度/页内恢复要用）
+                if w > 0 { reader.applyRatio(index, ratio: h / w) }
             },
             onSettled: { settledPages.insert(index) }
         )
@@ -138,7 +153,15 @@ struct PagedView: View {
     }
 
     private var prefetchPixelSize: Int {
-        let width = max(viewportSize.width, 320)
-        return min(4096, max(1024, Int(width * UIScreen.main.scale * 2)))
+        // 与显示侧共用同一公式（PageImageView.decodeTargetSize）；双页模式
+        // 的槽位是半宽，公式里用与显示一致的半宽槽位
+        PageImageView.decodeTargetSize(pointWidth: prefetchSlotWidth, scale: effectiveScale)
+    }
+
+    /// 预取目标槽宽：与显示槽位同源（双页 = 半宽，单页 = 全宽）
+    private var prefetchSlotWidth: CGFloat {
+        reader.mode == .double
+            ? max(60, (viewportSize.width - Self.pageGap) / 2)
+            : viewportSize.width
     }
 }

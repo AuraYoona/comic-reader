@@ -99,11 +99,15 @@ final class DispatchSaverTicket: SaverTicket {
 }
 
 extension DebouncedSaver.Clock {
+    /// 定时器回调队列：不指定队列时 DispatchSource 默认派发到主队列，
+    /// 写盘回调（整库 JSON 编码 + 落盘）会直接在主线程上执行
+    private static let timerQueue = DispatchQueue(label: "com.aurayoona.comicreader.saver.timer")
+
     public static func live() -> DebouncedSaver.Clock {
         DebouncedSaver.Clock(
             now: { Date().timeIntervalSince1970 },
             schedule: { body, delay in
-                let t = DispatchSource.makeTimerSource()
+                let t = DispatchSource.makeTimerSource(queue: Self.timerQueue)
                 t.schedule(deadline: .now() + delay)
                 t.setEventHandler(handler: body)
                 t.resume()

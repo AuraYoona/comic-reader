@@ -4,6 +4,8 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var reader: ReaderStore
+    @EnvironmentObject private var shelf: ShelfStore
+    @EnvironmentObject private var settings: SettingsStore
 
     var body: some View {
         ZStack {
@@ -18,6 +20,12 @@ struct RootView: View {
             ToastOverlay()
         }
         .animation(.easeOut(duration: 0.18), value: reader.active)
+        .onChange(of: reader.active) { visible in
+            // 书架常驻在阅读器下面：关闭时刷新快照，进度/未读徽章才跟上
+            if !visible { shelf.refreshAfterReading() }
+        }
+        // 放在观察 SettingsStore 的视图上：设置里切主题立即生效
+        .preferredColorScheme(settings.preferredScheme)
     }
 }
 
@@ -34,10 +42,11 @@ struct ToastOverlay: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .background(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(background(for: toast.kind))
-                            .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                    .liquidGlass(
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous),
+                        tint: background(for: toast.kind),
+                        tintOpacity: 0.80,
+                        shadowOpacity: 0.25
                     )
                     .onTapGesture { toasts.dismiss(toast.id) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -49,10 +58,12 @@ struct ToastOverlay: View {
     }
 
     private func background(for kind: ToastCenter.Kind) -> Color {
+        // 不透明色：透明度统一由 liquidGlass 的 tintOpacity 提供
+        // （此前颜色自带 alpha 再乘 tint 会双重打折，浅色模式下白字对比度不足）
         switch kind {
-        case .info: return Color.black.opacity(0.78)
-        case .success: return Color(red: 0.18, green: 0.62, blue: 0.42).opacity(0.95)
-        case .error: return Color(red: 0.85, green: 0.32, blue: 0.32).opacity(0.95)
+        case .info: return Color.black
+        case .success: return Color(red: 0.18, green: 0.62, blue: 0.42)
+        case .error: return Color(red: 0.85, green: 0.32, blue: 0.32)
         }
     }
 }

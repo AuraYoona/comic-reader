@@ -12,6 +12,8 @@ struct ReaderTopBar: View {
     @EnvironmentObject private var settings: SettingsStore
 
     let onBack: () -> Void
+    /// 输入页码聚焦期间钉住工具条（暂停自动隐藏）；失焦恢复
+    let onPin: (Bool) -> Void
 
     @State private var pageDraft = ""
     @FocusState private var jumpFocused: Bool
@@ -59,9 +61,11 @@ struct ReaderTopBar: View {
 
             jumpRow
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal, 10)
         .padding(.top, 6)
-        .padding(.bottom, 8)
-        .background(.bar)
     }
 
     // MARK: 页码输入跳转（PageJump 的移植）
@@ -83,6 +87,7 @@ struct ReaderTopBar: View {
                     if !jumpFocused { pageDraft = "\(reader.page + 1)" }
                 }
                 .onChange(of: jumpFocused) { focused in
+                    onPin(focused)
                     if !focused { commitJump() }
                 }
                 .onSubmit { commitJump() }
@@ -159,6 +164,7 @@ struct ReaderTopBar: View {
 struct ReaderBottomBar: View {
     @EnvironmentObject private var reader: ReaderStore
     @EnvironmentObject private var settings: SettingsStore
+    @State private var showChapters = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -169,9 +175,15 @@ struct ReaderBottomBar: View {
             progressRow
             controlsRow
         }
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(.bar)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .liquidGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
+        // 章节目录（分章节文件夹的漫画）
+        .sheet(isPresented: $showChapters) {
+            ChapterSheet()
+        }
     }
 
     // MARK: 进度行
@@ -234,6 +246,7 @@ struct ReaderBottomBar: View {
                 directionControls
                 Divider().frame(height: 18)
                 autoTurnControls
+                chapterControls
             }
             .padding(.horizontal, 14)
         }
@@ -299,6 +312,17 @@ struct ReaderBottomBar: View {
         case .fitWidth: return "适宽"
         case .fitHeight: return "适高"
         case .original: return "原始"
+        }
+    }
+
+    /// 章节目录（章节文件夹结构的漫画才有；≥ 2 章才展示）
+    @ViewBuilder
+    private var chapterControls: some View {
+        if reader.chapters.count >= 2 {
+            Divider().frame(height: 18)
+            barButton(icon: "list.bullet", text: "目录", active: false) {
+                showChapters = true
+            }
         }
     }
 
@@ -515,5 +539,56 @@ private struct ThumbImage: View {
         .task(id: "\(comic.id)-\(index)") {
             image = await pages.thumbnail(comic: comic, index: index)
         }
+    }
+}
+
+// MARK: - 章节目录（分章节文件夹漫画的跳转）
+
+struct ChapterSheet: View {
+    @EnvironmentObject private var reader: ReaderStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List(reader.chapters, id: \.startPage) { chapter in
+                Button {
+                    reader.setPage(chapter.startPage)
+                    dismiss()
+                } label: {
+                    row(for: chapter)
+                }
+            }
+            .navigationTitle("目录")
+            .navigationBarTitleDisplayMode(.inline)
+            .scrollContentBackground(.hidden)
+            .background(.ultraThinMaterial)
+        }
+    }
+
+    private func row(for chapter: ComicChapter) -> some View {
+        let isCurrent = chapter == currentChapter
+        return HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(chapter.title.isEmpty ? "正文" : chapter.title)
+                    .font(.system(size: 15, weight: isCurrent ? .semibold : .regular))
+                    .foregroundStyle(isCurrent ? Color.accentColor : .primary)
+                    .lineLimit(1)
+                Text("第 \(chapter.startPage + 1)–\(chapter.startPage + chapter.pageCount) 页")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if isCurrent {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// 当前页所在的章节（chapters 按 startPage 升序）
+    private var currentChapter: ComicChapter? {
+        reader.chapters.last { $0.startPage <= reader.page }
     }
 }

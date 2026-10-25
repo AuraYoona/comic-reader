@@ -18,6 +18,8 @@ final class CoverStore: ObservableObject {
     init(coversDir: String) {
         self.coversDir = coversDir
         cache.countLimit = 256
+        // 封面 480×640 解码后约 1.2MB；只限条数时几十本就能吃掉几百 MB
+        cache.totalCostLimit = 48 * 1024 * 1024
     }
 
     func url(for comic: Comic) -> URL? {
@@ -51,14 +53,16 @@ final class CoverStore: ObservableObject {
         return write(jpeg, name: name) ? name : nil
     }
 
-    /// 重新生成封面：读第一页 → 480px JPEG → 时间戳命名；更新数据库
-    /// （对应桌面版 regenerateCover；旧封面文件删除）
+    /// 重新生成封面：读第一页 → 480px 3:4 JPEG → 时间戳命名；更新数据库
+    /// （对应桌面版 regenerateCover；旧封面文件删除）。
+    /// 读取与编码都不在主线程上做（readPage 内部有信号量等待，会卡住 UI）
     @discardableResult
-    func regenerateCover(for comic: Comic, db: LibraryDatabase, now: Double) -> Comic? {
-        guard let page = try? readPage(comic, index: 0),
-              let jpeg = ImagePipeline.makeCover(from: page.data) else {
-            return nil
-        }
+    func regenerateCover(for comic: Comic, db: LibraryDatabase, now: Double) async -> Comic? {
+        let jpeg = await Task.detached(priority: .userInitiated) { () -> Data? in
+            guard let page = try? await readPageAsync(comic, index: 0) else { return nil }
+            return ImagePipeline.makeCover(from: page.data)
+        }.value
+        guard let jpeg else { return nil }
         let old = comic.coverFile
         let name = "\(comic.id)-\(Int(now)).jpg"
         guard write(jpeg, name: name) else { return nil }

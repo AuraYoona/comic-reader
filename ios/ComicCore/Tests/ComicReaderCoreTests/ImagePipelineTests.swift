@@ -67,9 +67,9 @@ final class ImagePipelineTests: XCTestCase {
         return (image.width, image.height, uti)
     }
 
-    // MARK: 封面
+    // MARK: 封面（480px 宽 + 居中裁成 3:4 —— 书架卡片比例）
 
-    func testCoverDownscalesWideImageTo480() {
+    func testCoverCropsWideImageTo3by4() {
         let png = makePNG(width: 1000, height: 800, color: (200, 30, 30))
         guard let jpeg = ImagePipeline.makeCover(from: png) else {
             return XCTFail("makeCover 不应失败")
@@ -77,8 +77,9 @@ final class ImagePipelineTests: XCTestCase {
         // JPEG 魔数
         XCTAssertEqual(jpeg.prefix(3).map { $0 }, [0xFF, 0xD8, 0xFF])
         let size = decodeSize(jpeg)
-        XCTAssertEqual(size.width, ImagePipeline.coverWidth)
-        XCTAssertEqual(size.height, 384) // 1000:800 → 480:384
+        // 1000:800 → 缩放 480:384 → 裁宽到 3:4 = 288:384
+        XCTAssertEqual(size.width, 288)
+        XCTAssertEqual(size.height, 384)
     }
 
     func testCoverDoesNotUpscaleNarrowImage() {
@@ -86,19 +87,43 @@ final class ImagePipelineTests: XCTestCase {
         guard let jpeg = ImagePipeline.makeCover(from: png) else {
             return XCTFail("makeCover 不应失败")
         }
-        XCTAssertEqual(decodeSize(jpeg).width, 300)
+        // 不放大：300:200 只裁不缩 → 3:4 = 150:200
+        XCTAssertEqual(decodeSize(jpeg).width, 150)
+        XCTAssertEqual(decodeSize(jpeg).height, 200)
     }
 
-    func testCoverIsWidthDrivenForPortraitImages() {
-        // 竖版封面（漫画常态）：结果宽度应为 480、高度按比例（桌面版语义是
-        // 「宽 > 480 才缩放」，不是「最长边 ≤ 480」）
+    func testCoverCropsPortraitImageTo3by4() {
+        // 竖版封面（漫画常态）：宽超 480 先缩到 480，再裁高到 640
         let png = makePNG(width: 800, height: 1200, color: (80, 80, 200))
         guard let jpeg = ImagePipeline.makeCover(from: png) else {
             return XCTFail("makeCover 不应失败")
         }
         let size = decodeSize(jpeg)
         XCTAssertEqual(size.width, ImagePipeline.coverWidth)
-        XCTAssertEqual(size.height, 720) // 800:1200 → 480:720
+        XCTAssertEqual(size.height, 640)
+    }
+
+    func testCoverCropsTallWebtoonPageTo3by4() {
+        // 条漫首页（竖长条）：旧的按宽缩放会得到 480×4800 的细长封面，
+        // 书架卡片里只能看到一小截，还一张就要数 MB 解码内存
+        let png = makePNG(width: 800, height: 8000, color: (120, 30, 200))
+        guard let jpeg = ImagePipeline.makeCover(from: png) else {
+            return XCTFail("makeCover 不应失败")
+        }
+        let size = decodeSize(jpeg)
+        XCTAssertEqual(size.width, ImagePipeline.coverWidth)
+        XCTAssertEqual(size.height, 640)
+    }
+
+    func testCoverKeepsExact3by4Untouched() {
+        let png = makePNG(width: 600, height: 800, color: (10, 130, 130))
+        guard let jpeg = ImagePipeline.makeCover(from: png) else {
+            return XCTFail("makeCover 不应失败")
+        }
+        // 已是 3:4：缩到 480×640，无需再裁
+        let size = decodeSize(jpeg)
+        XCTAssertEqual(size.width, 480)
+        XCTAssertEqual(size.height, 640)
     }
 
     func testCoverReturnsNilForGarbage() {

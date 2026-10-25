@@ -21,15 +21,26 @@ final class AppModel: ObservableObject {
     let settings: SettingsStore
     let covers: CoverStore
     let pages: PageProvider
+    let pageMeta: PageMetaStore
     let importer: Importer
     let shelf: ShelfStore
     let reader: ReaderStore
     let toasts: ToastCenter
     let importFlow: ImportFlow
+    let transfer: LanTransferModel
 
     @Published private(set) var booted = false
 
+    /// .inactive 落盘队列：整库编码+写盘不能占主线程（此刻界面仍可见），
+    /// 但从应用切换器划卡强杀通常收不到 .background，所以仍要落——
+    /// 派到后台串行队列，赶在进程终止前写完
+    private let dbFlushQueue = DispatchQueue(label: "com.aurayoona.comicreader.db.flush")
+
     init() {
+        // 压缩格式适配器装配：注册表默认为空，不装的话 ZIP/CBZ/RAR/PDF
+        // 的导入与阅读全部报「不支持的文件格式」
+        sharedArchiveRegistry.installBuiltinReaders()
+
         let paths = AppPaths.live()
         paths.ensureDirectories()
 
@@ -38,21 +49,30 @@ final class AppModel: ObservableObject {
         let settings = SettingsStore(db: db)
         let covers = CoverStore(coversDir: paths.coversDir)
         let pages = PageProvider()
+        let pageMeta = PageMetaStore(dir: paths.pageMetaDir)
         let importer = Importer(db: db, coversDir: paths.coversDir, coverFactory: DefaultCoverFactory())
         let shelf = ShelfStore(db: db, settings: settings, importer: importer, covers: covers, toasts: toasts)
-        let reader = ReaderStore(db: db, settings: settings, pages: pages)
+        let reader = ReaderStore(db: db, settings: settings, pages: pages, meta: pageMeta)
         let importFlow = ImportFlow(paths: paths, shelf: shelf, toasts: toasts)
+        let transfer = LanTransferModel(
+            paths: paths,
+            db: db,
+            shelf: shelf,
+            toasts: toasts
+        )
 
         self.paths = paths
         self.db = db
         self.settings = settings
         self.covers = covers
         self.pages = pages
+        self.pageMeta = pageMeta
         self.importer = importer
         self.shelf = shelf
         self.reader = reader
         self.toasts = toasts
         self.importFlow = importFlow
+        self.transfer = transfer
     }
 
     /// 启动流程（幂等；ContentView 的 .task 调用）
@@ -85,11 +105,21 @@ final class AppModel: ObservableObject {
         case .background:
             reader.flushPersist()
             db.flushSync()
+            // 页元数据 sidecar 与 library.json 同等落盘（挂起/强杀前）
+            pageMeta.flushSync()
             closeAllSources()
             pages.clearAll()
+            // iOS 会挂起进程，局域网监听留着也收不到包
+            transfer.handleBackground()
         case .inactive:
+            // .inactive 由下拉通知中心 / 控制中心 / 应用切换器触发且界面仍
+            // 可见：落盘挪到后台串行队列（writeToDisk 快照在数据库锁内、写盘
+            // 在 ioLock 下且有写序号保护，与防抖定时器/后台 flush 并发安全）
             reader.flushPersist()
-            db.flushSync()
+            dbFlushQueue.async { [db, pageMeta] in
+                db.flushSync()
+                pageMeta.flushSync()
+            }
         default:
             break
         }
