@@ -20,7 +20,9 @@ struct ComicReaderApp: App {
                 .environmentObject(model.pages)
                 .environmentObject(model.covers)
                 .environmentObject(model.transfer)
-                .preferredColorScheme(model.settings.preferredScheme)
+                // 明暗主题的 preferredColorScheme 在 RootView 上（它观察
+                // SettingsStore）：App 结构体只观察 model，嵌套在
+                // model.settings 里的变更不会传播到这里，切换不会立即生效
                 .task { await model.boot() }
                 .onChange(of: scenePhase) { phase in
                     model.handleScenePhase(phase)

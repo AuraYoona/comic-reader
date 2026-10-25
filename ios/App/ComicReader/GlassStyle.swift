@@ -44,4 +44,27 @@ extension View {
                 .shadow(color: .black.opacity(shadowOpacity), radius: 12, y: 4)
         }
     }
+
+    /// 全宽玻璃页头（书架顶栏等固定头部）：材质 + 镜面高光 + 底部发丝线，
+    /// 无描边与投影——悬浮感留给 liquidGlass 浮板
+    func glassHeader() -> some View {
+        self.background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    LinearGradient(
+                        colors: [.white.opacity(0.22), .white.opacity(0.04), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .allowsHitTesting(false)
+                }
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.12))
+                        .frame(height: 0.5)
+                        .allowsHitTesting(false)
+                }
+        }
+    }
 }

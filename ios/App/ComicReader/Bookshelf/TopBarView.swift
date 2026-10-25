@@ -27,7 +27,7 @@ struct TopBarView: View {
         .padding(.horizontal, 16)
         .padding(.top, 6)
         .padding(.bottom, 10)
-        .background(.bar)
+        .glassHeader()
     }
 
     // MARK: 标题行

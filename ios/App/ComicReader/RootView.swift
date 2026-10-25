@@ -5,6 +5,7 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var reader: ReaderStore
     @EnvironmentObject private var shelf: ShelfStore
+    @EnvironmentObject private var settings: SettingsStore
 
     var body: some View {
         ZStack {
@@ -23,6 +24,8 @@ struct RootView: View {
             // 书架常驻在阅读器下面：关闭时刷新快照，进度/未读徽章才跟上
             if !visible { shelf.refreshAfterReading() }
         }
+        // 放在观察 SettingsStore 的视图上：设置里切主题立即生效
+        .preferredColorScheme(settings.preferredScheme)
     }
 }
 

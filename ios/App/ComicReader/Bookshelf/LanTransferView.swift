@@ -382,8 +382,10 @@ struct LanTransferView: View {
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        Color.clear.liquidGlass(
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous),
+            shadowOpacity: 0.10
+        )
     }
 }
 
