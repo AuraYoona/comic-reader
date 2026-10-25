@@ -36,16 +36,27 @@ final class ReaderStore: ObservableObject {
     private let db: LibraryDatabase
     private let settings: SettingsStore
     private let pages: PageProvider
+    private let meta: PageMetaStore
     private var persistTask: Task<Void, Never>?
     private var endHintTask: Task<Void, Never>?
     /// 打开会话号：open 有了 await 点之后，close 后立即重开时
     /// 旧扫描凭它作废（否则旧结果会把新会话的状态覆盖回去）
     private var openEpoch = 0
 
-    init(db: LibraryDatabase, settings: SettingsStore, pages: PageProvider) {
+    /// 每页宽高比（h/w）——滚动模式占位高度与页内恢复的依据，
+    /// 读过的页跨会话记忆（sidecar 持久化）
+    @Published private(set) var pageRatios: [Int: Double] = [:]
+    /// 滚动模式重开时的页内恢复分数（一次性，视图取走即清；
+    /// 仅当目标页比率已知时非 nil——估算高×分数会错位数屏）
+    private(set) var restoreFraction: Double?
+    /// 滚动模式最近一次上报的页内位置（persistNow 时写入 sidecar）
+    private var lastScrollFraction: Double?
+
+    init(db: LibraryDatabase, settings: SettingsStore, pages: PageProvider, meta: PageMetaStore) {
         self.db = db
         self.settings = settings
         self.pages = pages
+        self.meta = meta
     }
 
     // MARK: 打开 / 关闭
@@ -116,12 +127,24 @@ final class ReaderStore: ObservableObject {
         page = fromStart ? 0 : min(max(0, updated.lastReadPage), list.count - 1)
 
         pages.clearCropCache()
+
+        // 页元数据：载入比率表（跨会话高度学习），截断越界键；
+        // 页内分数只在滚动模式且目标页比率已知时生效（否则退化为页顶恢复）
+        let m = meta.load(comicId: id)
+        meta.truncate(pageCount: list.count)
+        pageRatios = m.ratios
+        restoreFraction = (mode == .scroll && !fromStart)
+            ? ((m.scrollFraction != nil && m.ratios[page] != nil) ? m.scrollFraction : nil)
+            : nil
+        lastScrollFraction = nil
+
         schedulePersist()
     }
 
     /// 返回书架：先落进度，再清缓存（对齐 reader.ts close 189-210）
     func close() {
         flushPersist()
+        meta.flushSync()
         endHintTask?.cancel()
         endHint = false
         autoTurn = false
@@ -130,7 +153,33 @@ final class ReaderStore: ObservableObject {
         comic = nil
         page = 0
         pageCount = 0
+        pageRatios = [:]
+        restoreFraction = nil
+        lastScrollFraction = nil
         pages.clearAll()
+    }
+
+    // MARK: 页元数据（阶段2：宽高比学习 / 页内进度）
+
+    /// 视图回报某页的真实宽高比（h/w）：更新内存表并写入 sidecar
+    /// （变化超过阈值才算，避免重复标脏）
+    func applyRatio(_ index: Int, ratio: Double) {
+        guard ratio > 0, ratio.isFinite else { return }
+        if let old = pageRatios[index], abs(old - ratio) <= 0.01 { return }
+        pageRatios[index] = ratio
+        meta.setRatio(index: index, ratio: ratio)
+    }
+
+    /// 滚动模式：视口在当前页内的位置（0..<1，视图节流上报）
+    func updateScrollFraction(_ fraction: Double) {
+        lastScrollFraction = fraction
+    }
+
+    /// 取走一次性页内恢复分数（视图挂载时消费）
+    func takeRestoreFraction() -> Double? {
+        let f = restoreFraction
+        restoreFraction = nil
+        return f
     }
 
     // MARK: 翻页
@@ -335,6 +384,10 @@ final class ReaderStore: ObservableObject {
             autoScroll: autoScroll
         )
         _ = db.updateProgress(id: comic.id, patch: ProgressPatch(lastReadPage: page, reader: prefs))
+        // 滚动模式的页内进度双写进 sidecar（页码仍在 library.json，跨端语义不变）
+        if mode == .scroll {
+            meta.setScroll(page: page, fraction: lastScrollFraction ?? 0)
+        }
         // 刷新快照供界面使用（书架卡片进度等）
         if let refreshed = db.getComic(id: comic.id) {
             self.comic = refreshed

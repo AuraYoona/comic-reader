@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     let settings: SettingsStore
     let covers: CoverStore
     let pages: PageProvider
+    let pageMeta: PageMetaStore
     let importer: Importer
     let shelf: ShelfStore
     let reader: ReaderStore
@@ -48,9 +49,10 @@ final class AppModel: ObservableObject {
         let settings = SettingsStore(db: db)
         let covers = CoverStore(coversDir: paths.coversDir)
         let pages = PageProvider()
+        let pageMeta = PageMetaStore(dir: paths.pageMetaDir)
         let importer = Importer(db: db, coversDir: paths.coversDir, coverFactory: DefaultCoverFactory())
         let shelf = ShelfStore(db: db, settings: settings, importer: importer, covers: covers, toasts: toasts)
-        let reader = ReaderStore(db: db, settings: settings, pages: pages)
+        let reader = ReaderStore(db: db, settings: settings, pages: pages, meta: pageMeta)
         let importFlow = ImportFlow(paths: paths, shelf: shelf, toasts: toasts)
         let transfer = LanTransferModel(
             paths: paths,
@@ -64,6 +66,7 @@ final class AppModel: ObservableObject {
         self.settings = settings
         self.covers = covers
         self.pages = pages
+        self.pageMeta = pageMeta
         self.importer = importer
         self.shelf = shelf
         self.reader = reader
@@ -102,6 +105,8 @@ final class AppModel: ObservableObject {
         case .background:
             reader.flushPersist()
             db.flushSync()
+            // 页元数据 sidecar 与 library.json 同等落盘（挂起/强杀前）
+            pageMeta.flushSync()
             closeAllSources()
             pages.clearAll()
             // iOS 会挂起进程，局域网监听留着也收不到包
@@ -111,8 +116,9 @@ final class AppModel: ObservableObject {
             // 可见：落盘挪到后台串行队列（writeToDisk 快照在数据库锁内、写盘
             // 在 ioLock 下且有写序号保护，与防抖定时器/后台 flush 并发安全）
             reader.flushPersist()
-            dbFlushQueue.async { [db] in
+            dbFlushQueue.async { [db, pageMeta] in
                 db.flushSync()
+                pageMeta.flushSync()
             }
         default:
             break

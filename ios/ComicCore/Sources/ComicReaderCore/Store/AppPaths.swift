@@ -20,6 +20,8 @@ public struct AppPaths: Sendable {
 
     public var libraryPath: String { supportDir + "/library.json" }
     public var coversDir: String { supportDir + "/covers" }
+    /// 每本漫画的页元数据 sidecar 目录（页宽高比 / 页内进度）
+    public var pageMetaDir: String { supportDir + "/page-meta" }
 
     /// 生产环境路径（iOS）
     public static func live() -> AppPaths {
@@ -36,6 +38,7 @@ public struct AppPaths: Sendable {
         let fm = FileManager.default
         try? fm.createDirectory(atPath: supportDir, withIntermediateDirectories: true)
         try? fm.createDirectory(atPath: coversDir, withIntermediateDirectories: true)
+        try? fm.createDirectory(atPath: pageMetaDir, withIntermediateDirectories: true)
         try? fm.createDirectory(atPath: comicsDir, withIntermediateDirectories: true)
     }
 }

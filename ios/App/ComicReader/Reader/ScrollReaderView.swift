@@ -22,6 +22,8 @@ struct ScrollReaderView: View {
         /// 宿主 UIScrollView 缓存（主线程访问）：几何回调高频触发，
         /// 不能每次都递归遍历视图树去找
         weak var host: UIScrollView?
+        /// 内容宽度（页内偏移换算用；onAppear/几何变化时更新）
+        var width: CGFloat = 0
     }
 
     @State private var heights: [Int: CGFloat] = [:]
@@ -38,6 +40,10 @@ struct ScrollReaderView: View {
     /// （自举 scrollTo 的位移不能被误判成用户接管）
     @State private var programmaticOffset: CGFloat?
     @State private var positioningWork: [DispatchWorkItem] = []
+    /// 定位目标的页内偏移（页内分数恢复时非 0；目标行顶 + 偏移 = 落点）
+    @State private var targetInPageOffset: CGFloat = 0
+    /// 页内进度上报的去抖任务（几何活动停止 1s 后上报一次）
+    @State private var fractionReportWork: DispatchWorkItem?
     /// 锚定补偿开关（视口上方行长高时顶回 offset，等价 CSS overflow
     /// anchoring）；真机若出现异常位移可单独关闭
     private let anchorCompensationEnabled = true
@@ -64,15 +70,22 @@ struct ScrollReaderView: View {
                     TapGesture().onEnded { onToggleBars() }
                 )
                 .onAppear {
+                    busState.width = width
                     // 恢复上次阅读位置：闭环定位（对齐桌面版 mount 的
                     // scrollIntoView，但落点由实测帧决定，与懒加载的高度
-                    // 估算无关——估算对条漫差 3~10 倍，scrollTo 必偏）
+                    // 估算无关——估算对条漫差 3~10 倍，scrollTo 必偏）。
+                    // 页内分数只在目标页比率已知时使用（估算高×分数会错位数屏）
                     if reader.page > 0 {
-                        beginPositioning(to: reader.page, proxy: proxy)
+                        let fraction = reader.takeRestoreFraction() ?? 0
+                        beginPositioning(to: reader.page, proxy: proxy, inPageFraction: fraction)
                     }
+                }
+                .onChange(of: geo.size) { size in
+                    busState.width = size.width
                 }
                 .onDisappear {
                     cancelPositioningWork()
+                    fractionReportWork?.cancel()
                 }
                 .onChange(of: reader.page) { newPage in
                     // 外部跳页（进度条 / 缩略图条 / 书签）→ 同样走闭环定位。
@@ -93,7 +106,11 @@ struct ScrollReaderView: View {
     @ViewBuilder
     private func slot(comic: Comic, index: Int, width: CGFloat, viewportHeight: CGFloat) -> some View {
         let visible = abs(index - reader.page) <= 2
-        let placeholderHeight = heights[index] ?? max(420, width * 1.2)
+        // 占位高度优先级：本会话实测 > sidecar 比率（跨会话学习）> 默认估计。
+        // 比率越准，懒栈的布局高度越接近真实——滚动越稳、定位越准
+        let placeholderHeight = heights[index]
+            ?? reader.pageRatios[index].map { width * CGFloat($0) }
+            ?? max(420, width * 1.2)
 
         Group {
             if visible {
@@ -130,9 +147,11 @@ struct ScrollReaderView: View {
     /// 图片真实宽高比到手：记高度；视口上方的行长高时做锚定补偿
     /// （SwiftUI 没有 CSS overflow anchoring，不补偿则内容整体后移、视口被顶回）
     private func applyNaturalSize(index: Int, width: CGFloat, ratio: Double) {
+        // 宽高比跨会话学习（sidecar 持久化）
+        reader.applyRatio(index, ratio: ratio)
         let newHeight = width * ratio
-        let oldHeight = heights[index] ?? max(420, width * 1.2)
-        guard newHeight != oldHeight else { return }
+        let known = heights[index] ?? reader.pageRatios[index].map { width * CGFloat($0) } ?? max(420, width * 1.2)
+        guard newHeight != known else { return }
         heights[index] = newHeight
         if positioningTarget != nil {
             // 定位中：目标附近高度在变，追加一轮事件驱动的闭环校正
@@ -145,7 +164,7 @@ struct ScrollReaderView: View {
               let absY = slotAbsoluteY[index],
               absY < host.contentOffset.y - 8  // 行顶在视口上方
         else { return }
-        let dy = newHeight - oldHeight
+        let dy = newHeight - known
         host.setContentOffset(
             CGPoint(x: 0, y: Self.clampOffset(host.contentOffset.y + dy, for: host)),
             animated: false
@@ -163,6 +182,7 @@ struct ScrollReaderView: View {
         slotAbsoluteY[index] = frame.minY + host.contentOffset.y
         guard positioningTarget != nil else {
             reportMidline(index: index, frame: frame, viewportHeight: viewportHeight)
+            scheduleFractionReport()
             return
         }
         // 闸关：只有「视口被用户 / 自动滚动带走」才开闸（手势三旗，或相对
@@ -220,12 +240,19 @@ struct ScrollReaderView: View {
     // 「目标行顶贴视口顶」。定位期间（闸关）中线不上报页码——定位失败且
     // 用户未动时 page 保持恢复目标入库，绝不写错页；用户的第一个手势开闸。
 
-    /// 开始闭环定位：恢复位置 / 外部跳页共用
-    private func beginPositioning(to target: Int, proxy: ScrollViewProxy) {
+    /// 开始闭环定位：恢复位置 / 外部跳页共用。
+    /// inPageFraction：页内落点分数（仅恢复时由 sidecar 提供，比率已知才非 0）
+    private func beginPositioning(to target: Int, proxy: ScrollViewProxy, inPageFraction: Double = 0) {
         cancelPositioningWork()
         positioningTarget = target
         programmaticOffset = nil
         lastReportedPage = target
+        if inPageFraction > 0, inPageFraction < 1,
+           let ratio = reader.pageRatios[target] {
+            targetInPageOffset = busState.width * CGFloat(ratio) * CGFloat(inPageFraction)
+        } else {
+            targetInPageOffset = 0
+        }
         // iOS 16 首帧布局完成前 scrollTo 可能被丢弃：推迟到下一 runloop 发
         DispatchQueue.main.async { proxy.scrollTo(target, anchor: .top) }
         for delay in [0.35, 0.9, 1.6, 2.6] {
@@ -252,8 +279,8 @@ struct ScrollReaderView: View {
     private func positioningStep(target: Int, proxy: ScrollViewProxy?) {
         guard positioningTarget == target else { return }
         guard let host = hostScrollView() else { return }
-        // 收敛：实测绝对 Y 与当前 offset 对齐（上一轮设完后未再漂移）
-        if let absY = slotAbsoluteY[target], abs(absY - host.contentOffset.y) <= 24 {
+        // 收敛：实测绝对 Y（含页内偏移）与当前 offset 对齐（设完后未再漂移）
+        if let absY = slotAbsoluteY[target], abs(absY + targetInPageOffset - host.contentOffset.y) <= 24 {
             finishPositioning()
             return
         }
@@ -268,7 +295,7 @@ struct ScrollReaderView: View {
             proxy?.scrollTo(target, anchor: .top)
             return
         }
-        let desired = Self.clampOffset(absY, for: host)
+        let desired = Self.clampOffset(absY + targetInPageOffset, for: host)
         host.setContentOffset(CGPoint(x: 0, y: desired), animated: false)
         programmaticOffset = desired
     }
@@ -276,12 +303,36 @@ struct ScrollReaderView: View {
     private func finishPositioning() {
         positioningTarget = nil
         programmaticOffset = nil
+        targetInPageOffset = 0
         cancelPositioningWork()
     }
 
     private func cancelPositioningWork() {
         for item in positioningWork { item.cancel() }
         positioningWork.removeAll()
+    }
+
+    /// 页内进度上报：几何活动停止 1s 后触发一次（滚动中不断重排期，
+    /// 静止即上报）。只在闸开（定位结束）时工作
+    private func scheduleFractionReport() {
+        guard positioningTarget == nil else { return }
+        fractionReportWork?.cancel()
+        let item = DispatchWorkItem { self.reportFractionNow() }
+        fractionReportWork = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: item)
+    }
+
+    private func reportFractionNow() {
+        guard positioningTarget == nil,
+              let host = hostScrollView(),
+              let topAbs = slotAbsoluteY[reader.page] else { return }
+        // 页高用实测（heights）或比率换算；两者都没有（当前页未解码且无
+        // 学习记录）就不报——宁缺毋滥，页顶粒度已由页码进度兜底
+        let pageHeight = heights[reader.page]
+            ?? reader.pageRatios[reader.page].map { busState.width * CGFloat($0) }
+        guard let pageHeight, pageHeight > 1 else { return }
+        let f = (host.contentOffset.y - topAbs) / pageHeight
+        reader.updateScrollFraction(min(max(0, Double(f)), 0.999))
     }
 
     /// 宿主 UIScrollView（带缓存）：几何回调高频触发，不能每次遍历视图树
