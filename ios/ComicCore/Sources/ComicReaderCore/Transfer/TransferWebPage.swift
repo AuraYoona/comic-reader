@@ -2,11 +2,8 @@ import Foundation
 
 // MARK: - 局域网传输的网页（服务端内置，无任何外部资源）
 //
-// 两个页面：
-//   - landing：输入 6 位密码（没有二维码 / 不想扫码时用）
-//   - app：上传（拖拽 / 多选、进度、重试）与书架下载
-//
-// 页面以 /<code>/ 结尾提供，所有接口都用相对路径，因此 JS 里不需要拼密码。
+// 单页面：上传（拖拽 / 多选、进度、重试）与书架下载。
+// 页面以 / 结尾提供，所有接口都用相对路径。
 // 模板用占位符替换，设备名经过 HTML 转义（设备名是用户可改的自由文本，防 XSS）。
 
 public enum TransferWebPage {
@@ -15,14 +12,6 @@ public enum TransferWebPage {
         appTemplate
             .replacingOccurrences(of: "{{DEVICE_NAME}}", with: htmlEscape(deviceName))
             .replacingOccurrences(of: "{{LIBRARY_COUNT}}", with: String(libraryCount))
-    }
-
-    /// 密码输入页；密码错误时显示提示
-    public static func landing(wrongCode: Bool = false) -> String {
-        let error = wrongCode
-            ? "<p class=\"error\" role=\"alert\">密码不正确，请重新输入</p>"
-            : ""
-        return landingTemplate.replacingOccurrences(of: "{{ERROR}}", with: error)
     }
 
     /// HTML 文本转义
@@ -41,92 +30,6 @@ public enum TransferWebPage {
         }
         return out
     }
-
-    // MARK: - 密码输入页
-
-    private static let landingTemplate = #"""
-<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<title>局域网传输 · 漫画阅读器</title>
-<style>
-  :root {
-    --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73;
-    --line: rgba(0,0,0,.10); --accent: #3b82f6; --bad: #ef4444;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0b0b0c; --card: #161618; --text: #f5f5f7; --muted: #a1a1a6; --line: rgba(255,255,255,.12); }
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    display: flex; align-items: center; justify-content: center; padding: 24px;
-  }
-  .card {
-    width: min(420px, 100%); background: var(--card); border: 1px solid var(--line);
-    border-radius: 20px; padding: 28px 26px 24px;
-    box-shadow: 0 18px 50px rgba(0,0,0,.10);
-  }
-  .logo { font-size: 30px; line-height: 1; }
-  h1 { font-size: 19px; margin: 12px 0 4px; letter-spacing: -.2px; }
-  p.lead { margin: 0 0 20px; color: var(--muted); font-size: 13.5px; }
-  label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
-  input[type="text"], input[type="tel"] {
-    width: 100%; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--line);
-    background: transparent; color: var(--text); font-size: 24px; letter-spacing: 8px;
-    text-align: center; font-variant-numeric: tabular-nums; outline: none;
-  }
-  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
-  button {
-    width: 100%; margin-top: 12px; padding: 12px 16px; border: 0; border-radius: 12px;
-    background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
-  }
-  button:active { transform: translateY(1px); }
-  .error { color: var(--bad); font-size: 13px; margin: 10px 0 0; min-height: 18px; }
-  .foot { margin-top: 18px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-</style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo">📖</div>
-    <h1>局域网传输</h1>
-    <p class="lead">请输入手机「局域网传输」面板上显示的 6 位密码。</p>
-    <form id="form" autocomplete="off">
-      <label for="code">连接密码</label>
-      <input id="code" name="code" type="tel" inputmode="numeric" pattern="[0-9]{6}"
-             maxlength="6" autocomplete="one-time-code" placeholder="000000" autofocus>
-      <button type="submit">进入传输页面</button>
-    </form>
-    {{ERROR}}
-    <div class="foot">电脑与手机需连接同一个 Wi-Fi（或电脑连手机热点）。<br>密码每次开启传输都会重新生成。</div>
-  </div>
-<script>
-(function () {
-  'use strict';
-  var form = document.getElementById('form');
-  var input = document.getElementById('code');
-  form.addEventListener('submit', function (event) {
-    event.preventDefault();
-    var value = (input.value || '').replace(/\s+/g, '');
-    if (!/^\d{6}$/.test(value)) {
-      input.focus();
-      return;
-    }
-    location.href = '/' + value + '/';
-  });
-  input.addEventListener('input', function () {
-    input.value = input.value.replace(/\D+/g, '').slice(0, 6);
-  });
-})();
-</script>
-</body>
-</html>
-"""#
 
     // MARK: - 主页面
 

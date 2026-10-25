@@ -35,7 +35,6 @@ enum LanTransferServerError: LocalizedError {
 
 final class LanTransferServer: @unchecked Sendable {
     static let maxConnections = 16
-    static let maxAuthFailures = 10
 
     private static let serverQueueKey = DispatchSpecificKey<Void>()
     private static let pageHeaders: [(String, String)] = [
@@ -56,7 +55,6 @@ final class LanTransferServer: @unchecked Sendable {
     }
 
     private let queue = DispatchQueue(label: "com.comicreader.lan-transfer.server")
-    private let token: String
     private let deviceName: String
     private let paths: AppPaths
     private let library: LanTransferLibrary
@@ -66,25 +64,20 @@ final class LanTransferServer: @unchecked Sendable {
     private var connections: [ObjectIdentifier: LanTransferConnection] = [:]
     private let pendingLock = NSLock()
     private var pendingUploads: [ObjectIdentifier: PendingUpload] = [:]
-    private let authLock = NSLock()
-    private var authFailures = 0
     private var stopped = false
 
     private(set) var port: UInt16 = 0
 
     var onUploadReady: (@Sendable (LanTransferUploadReady) -> Void)?
     var onConnectionCountChanged: (@Sendable (Int) -> Void)?
-    var onAuthLockout: (@Sendable () -> Void)?
     var onListenerFailed: (@Sendable (String) -> Void)?
 
     init(
-        token: String,
         deviceName: String,
         paths: AppPaths,
         library: LanTransferLibrary,
         statusStore: LanTransferStatusStore
     ) {
-        self.token = token
         self.deviceName = deviceName
         self.paths = paths
         self.library = library
@@ -310,22 +303,6 @@ final class LanTransferServer: @unchecked Sendable {
         return pendingUploads.removeValue(forKey: ObjectIdentifier(connection))
     }
 
-    // MARK: 鉴权
-
-    private func registerAuthFailure() -> Bool {
-        authLock.lock()
-        authFailures += 1
-        let count = authFailures
-        authLock.unlock()
-        return count >= Self.maxAuthFailures
-    }
-
-    private func resetAuthFailures() {
-        authLock.lock()
-        authFailures = 0
-        authLock.unlock()
-    }
-
     // MARK: 路径
 
     private var inboxDirPath: String {
@@ -400,89 +377,14 @@ extension LanTransferServer: LanTransferConnectionDelegate {
     ) -> LanTransferResponsePlan {
         let route = TransferRoute.parse(head.target)
 
-        // 密码页不需要鉴权
-        if case .landing = route {
-            guard isReadMethod(head) else {
-                return .reject(
-                    status: .methodNotAllowed,
-                    message: "只支持 GET / HEAD",
-                    headOnly: head.isHeadRequest
-                )
-            }
-            let page = TransferWebPage.landing()
-            connection.respond(
-                status: .ok,
-                contentType: "text/html; charset=utf-8",
-                body: Data(page.utf8),
-                extraHeaders: Self.pageHeaders,
-                headOnly: head.isHeadRequest
-            )
-            return .respondNow
-        }
-
-        // 路径首段必须等于本次会话密码。
-        // 浏览器自动请求的 /favicon.ico、/apple-touch-icon.png 等不是 6 位数字，
-        // 直接 404 且不计入密码失败——否则几次页面加载就可能误触发停服。
-        guard let presented = route.token else {
-            connection.respond(
-                status: .notFound,
-                contentType: "text/plain; charset=utf-8",
-                body: Data("Not Found".utf8),
-                headOnly: head.isHeadRequest
-            )
-            return .respondNow
-        }
-        guard TransferToken.isWellFormed(presented) else {
-            connection.respond(
-                status: .notFound,
-                contentType: "text/plain; charset=utf-8",
-                body: Data("Not Found".utf8),
-                headOnly: head.isHeadRequest
-            )
-            return .respondNow
-        }
-        guard TransferToken.matches(presented, expected: token) else {
-            let lockout = registerAuthFailure()
-            let body = Data(TransferWebPage.landing(wrongCode: true).utf8)
-            // 延迟 0.4 秒再响应，降低暴力枚举速度
-            queue.asyncAfter(deadline: .now() + 0.4) {
-                connection.respond(
-                    status: .forbidden,
-                    contentType: "text/html; charset=utf-8",
-                    body: body,
-                    extraHeaders: Self.pageHeaders,
-                    headOnly: head.isHeadRequest
-                )
-            }
-            if lockout {
-                // 先让 403 发出去，再通知模型停服
-                queue.asyncAfter(deadline: .now() + 0.9) { [weak self] in
-                    self?.onAuthLockout?()
-                }
-            }
-            return .respondNow
-        }
-        resetAuthFailures()
-
         switch route {
         case .landing:
-            return .respondNow // 已在上方处理
-
-        case .page(_, let trailingSlash):
             guard isReadMethod(head) else {
                 return .reject(
                     status: .methodNotAllowed,
                     message: "只支持 GET / HEAD",
                     headOnly: head.isHeadRequest
                 )
-            }
-            if !trailingSlash {
-                connection.respond(
-                    status: .movedPermanently,
-                    extraHeaders: [("Location", "/\(token)/")],
-                    headOnly: head.isHeadRequest
-                )
-                return .respondNow
             }
             let page = TransferWebPage.app(
                 deviceName: deviceName,
@@ -497,7 +399,7 @@ extension LanTransferServer: LanTransferConnectionDelegate {
             )
             return .respondNow
 
-        case .state(_):
+        case .state:
             guard isReadMethod(head) else {
                 return .reject(
                     status: .methodNotAllowed,
@@ -513,7 +415,7 @@ extension LanTransferServer: LanTransferConnectionDelegate {
             )
             return .respondNow
 
-        case .library(_):
+        case .library:
             guard isReadMethod(head) else {
                 return .reject(
                     status: .methodNotAllowed,
@@ -529,7 +431,7 @@ extension LanTransferServer: LanTransferConnectionDelegate {
             )
             return .respondNow
 
-        case .cover(_, let id):
+        case .cover(let id):
             guard isReadMethod(head) else {
                 return .reject(
                     status: .methodNotAllowed,
@@ -556,7 +458,7 @@ extension LanTransferServer: LanTransferConnectionDelegate {
             }
             return .respondNow
 
-        case .download(_, let id):
+        case .download(let id):
             guard isReadMethod(head) else {
                 return .reject(
                     status: .methodNotAllowed,
@@ -584,10 +486,10 @@ extension LanTransferServer: LanTransferConnectionDelegate {
             }
             return .respondNow
 
-        case .upload(_, let fileName):
+        case .upload(let fileName):
             return handleUpload(connection, head: head, fileName: fileName)
 
-        case .notFound(_):
+        case .notFound:
             return .reject(
                 status: .notFound,
                 message: "接口不存在",

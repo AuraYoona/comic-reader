@@ -5,7 +5,7 @@ import UIKit
 
 // MARK: - 局域网传输面板
 //
-// 打开即启动服务：二维码 / 地址 / 6 位密码 / 传输记录。
+// 打开即启动服务：二维码 / 地址 / 传输记录。
 // 关闭面板或 App 进后台会自动停服；服务运行期间禁用自动锁屏。
 
 struct LanTransferView: View {
@@ -131,15 +131,6 @@ struct LanTransferView: View {
                     .padding(.horizontal, 4)
 
                 HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("连接密码")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                        Text(transfer.displayCode)
-                            .font(.system(size: 20, weight: .semibold, design: .monospaced))
-                            .kerning(1)
-                    }
-
                     Spacer()
 
                     Button {
@@ -345,7 +336,7 @@ struct LanTransferView: View {
         VStack(spacing: 12) {
             Text("传输已停止")
                 .font(.system(size: 15, weight: .semibold))
-            Text("点击开始后会生成新的二维码与密码。")
+            Text("点击开始后会生成新的二维码。")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             Button {

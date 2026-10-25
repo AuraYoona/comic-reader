@@ -217,16 +217,25 @@ final class ShelfStore: ObservableObject {
         return mergedResults + results
     }
 
-    /// 同名并入：incoming 是文件夹且去掉「 (n)」后缀后与既有文件夹书目同名 →
-    /// 把它的一级子项（章节）搬进既有书目目录，重扫刷新页数并按条目名平移
+    /// 同名并入：去掉「 (n)」后缀后与既有文件夹书目同名的新导入 →
+    /// 把它的内容作为章节搬进既有书目目录，重扫刷新页数并按条目名平移
     /// 阅读进度。同名子项视为同一章节跳过（重复发送的场景）。
+    /// 两种形态：文件夹（一级子项即章节）；ZIP/CBZ（网页上传的实际形态，
+    /// 解压到临时目录后同规则处理）。RAR/PDF 不参与（提取成本/结构不适合）。
     /// 返回合成的导入回执（回执缺失会被传输界面标为失败）
     private func mergeIncomingIntoExisting(_ path: String) async -> ImportResult? {
         let fm = FileManager.default
         var isDir: ObjCBool = false
-        guard fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return nil }
-        let stripped = stripDedupSuffix((path as NSString).lastPathComponent)
-        guard !stripped.isEmpty,
+        let exists = fm.fileExists(atPath: path, isDirectory: &isDir)
+        let name = (path as NSString).lastPathComponent
+        // 扩展名只在压缩包上剥（漫画a.cbz → 漫画a）；文件夹名里的点
+        // 是名字的一部分（「v1.2」剥成「v1」会导致匹配不上、退回重复导入）
+        let stripped = stripDedupSuffix(
+            isDir.boolValue ? name : (name as NSString).deletingPathExtension
+        )
+        // 压缩包来源：书名匹配时把扩展名去掉再比（漫画a 01.cbz → 漫画a 01）；
+        // 匹配不上则走普通导入
+        guard exists, !stripped.isEmpty,
               let existing = comics.first(where: {
                   $0.sourceType == .folder
                       && (($0.sourcePath as NSString).lastPathComponent == stripped || $0.title == stripped)
@@ -234,7 +243,33 @@ final class ShelfStore: ObservableObject {
         else { return nil }
         // 既有书目目录不在了（来源丢失）→ 按普通导入处理
         guard fm.fileExists(atPath: existing.sourcePath) else { return nil }
-        guard let children = try? fm.contentsOfDirectory(atPath: path).sorted() else { return nil }
+
+        // 归一化出「一级子项（章节）列表」：文件夹直接列；压缩包解压到临时目录
+        let staging: String
+        if isDir.boolValue {
+            staging = path
+        } else {
+            guard archiveFormat(path) == .zip else { return nil } // RAR/PDF：普通导入
+            staging = NSTemporaryDirectory() + "/merge-\(UUID().uuidString)"
+            let sourcePath = path
+            do {
+                let written = try await runOnArchiveQueue {
+                    try extractSourceArchive(sourcePath: sourcePath, toDirectory: staging)
+                }
+                guard written > 0 else {
+                    try? fm.removeItem(atPath: staging)
+                    return nil
+                }
+            } catch {
+                try? fm.removeItem(atPath: staging)
+                toasts.show(.error, "解压「\(name)」失败：\(error.localizedDescription)")
+                return nil
+            }
+        }
+        defer { if staging != path { try? fm.removeItem(atPath: staging) } }
+        guard let children = try? fm.contentsOfDirectory(atPath: staging).sorted(), !children.isEmpty else {
+            return nil
+        }
 
         var movedCount = 0
         var skippedCount = 0
@@ -245,15 +280,17 @@ final class ShelfStore: ObservableObject {
                     skippedCount += 1 // 同名子项：视为同一章节，保留既有
                     continue
                 }
-                if (try? fm.moveItem(atPath: path + "/" + child, toPath: dest)) != nil {
+                if (try? fm.moveItem(atPath: staging + "/" + child, toPath: dest)) != nil {
                     movedCount += 1
                 } else {
-                    try fm.copyItem(atPath: path + "/" + child, toPath: dest)
+                    try fm.copyItem(atPath: staging + "/" + child, toPath: dest)
                     movedCount += 1
                 }
             }
-            // 搬空的落盘目录清掉
+            // 搬空的落盘目录清掉；压缩包原件一并删除（内容已并入）
             if let left = try? fm.contentsOfDirectory(atPath: path), left.isEmpty {
+                try? fm.removeItem(atPath: path)
+            } else if !isDir.boolValue {
                 try? fm.removeItem(atPath: path)
             }
         } catch {

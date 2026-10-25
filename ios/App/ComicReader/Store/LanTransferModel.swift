@@ -22,7 +22,6 @@ final class LanTransferModel: ObservableObject {
 
     @Published private(set) var phase: Phase = .stopped
     @Published private(set) var urlString: String?
-    @Published private(set) var token = ""
     @Published private(set) var port: UInt16 = 0
     @Published private(set) var ipAddress: String?
     @Published private(set) var recent: [LanTransferStatusStore.Item] = []
@@ -70,19 +69,6 @@ final class LanTransferModel: ObservableObject {
         self.autoImport = (defaults.object(forKey: Self.autoImportKey) as? Bool) ?? true
     }
 
-    /// 面板上显示的密码（每两位一组，便于口述）
-    var displayCode: String {
-        guard !token.isEmpty else { return "------" }
-        var groups: [String] = []
-        var index = token.startIndex
-        while index < token.endIndex {
-            let end = token.index(index, offsetBy: 2, limitedBy: token.endIndex) ?? token.endIndex
-            groups.append(String(token[index..<end]))
-            index = end
-        }
-        return groups.joined(separator: " ")
-    }
-
     // MARK: 启停
 
     func start() async {
@@ -96,7 +82,6 @@ final class LanTransferModel: ObservableObject {
             return
         }
 
-        let code = TransferToken.generate()
         let store = LanTransferStatusStore()
         store.onChange = { [weak self] in
             Task { @MainActor in self?.refreshRecent() }
@@ -104,7 +89,6 @@ final class LanTransferModel: ObservableObject {
 
         let library = LanTransferLibrary(db: db, coversDir: paths.coversDir)
         let server = LanTransferServer(
-            token: code,
             deviceName: UIDevice.current.name,
             paths: paths,
             library: library,
@@ -116,9 +100,6 @@ final class LanTransferModel: ObservableObject {
         }
         server.onConnectionCountChanged = { [weak self] count in
             Task { @MainActor in self?.connectionCount = count }
-        }
-        server.onAuthLockout = { [weak self] in
-            Task { @MainActor in self?.handleAuthLockout() }
         }
         server.onListenerFailed = { [weak self] message in
             Task { @MainActor in self?.handleListenerFailure(message) }
@@ -133,10 +114,9 @@ final class LanTransferModel: ObservableObject {
 
             self.server = server
             self.statusStore = store
-            self.token = code
             self.port = actualPort
             self.ipAddress = ip
-            self.urlString = "http://\(ip):\(actualPort)/\(code)/"
+            self.urlString = "http://\(ip):\(actualPort)/"
             self.recent = store.snapshot()
             self.connectionCount = 0
             self.phase = .running
@@ -182,13 +162,6 @@ final class LanTransferModel: ObservableObject {
 
     private func refreshRecent() {
         recent = statusStore?.snapshot() ?? []
-    }
-
-    private func handleAuthLockout() {
-        guard phase == .running || phase == .starting else { return }
-        stop(notify: false)
-        phase = .failed("密码错误次数过多，传输已停止")
-        toasts.show(.error, "密码错误次数过多，局域网传输已停止")
     }
 
     private func handleListenerFailure(_ message: String) {
