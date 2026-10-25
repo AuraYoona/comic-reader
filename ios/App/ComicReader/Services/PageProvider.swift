@@ -30,6 +30,10 @@ final class PageProvider: ObservableObject {
     private var cropCache: [String: CropInsets?] = [:]
     private var cropOrder: [String] = []
     private var inflight: [String: Task<UIImage?, Never>] = [:]
+    /// 会话代际：clearAll 时递增。解码中的旧任务完成后凭代际判断是否已跨会话，
+    /// 跨会话的旧结果不回写缓存、不动新会话的 inflight 表（此前旧任务会把
+    /// 旧尺寸的图写回刚清空的缓存，还会误删新会话注册的同 key 去重项）
+    private var generation = 0
 
     init() {
         pageCache.countLimit = Self.pageCacheCount
@@ -69,22 +73,24 @@ final class PageProvider: ObservableObject {
     // MARK: 页面图
 
     /// 缓存命中直接返回（同步，供首帧无闪）
-    func cachedPage(comic: Comic, index: Int) -> UIImage? {
-        pageCache.object(forKey: key(comic, index) as NSString)
+    func cachedPage(comic: Comic, index: Int, maxPixelSize: Int) -> UIImage? {
+        pageCache.object(forKey: pageKey(comic, index, maxPixelSize) as NSString)
     }
 
     /// 解码一页（带并发去重）；maxPixelSize = 目标最长边像素
     func page(comic: Comic, index: Int, maxPixelSize: Int) async -> UIImage? {
-        let k = key(comic, index)
+        let k = pageKey(comic, index, maxPixelSize)
         if let hit = pageCache.object(forKey: k as NSString) { return hit }
         if let running = inflight[k] { return await running.value }
 
+        let gen = generation
         let task = Task<UIImage?, Never> { [weak self] in
             let decoded = await Self.decodePage(comic: comic, index: index, maxPixelSize: maxPixelSize)
-            if let self, let decoded {
+            guard let self, self.generation == gen else { return decoded }
+            if let decoded {
                 self.pageCache.setObject(decoded, forKey: k as NSString)
             }
-            self?.clearInflight(k)
+            self.clearInflight(k)
             return decoded
         }
         inflight[k] = task
@@ -97,14 +103,16 @@ final class PageProvider: ObservableObject {
         for offset in offsets {
             let index = current + offset
             guard index >= 0, index < comic.pageCount else { continue }
-            let k = key(comic, index)
+            let k = pageKey(comic, index, maxPixelSize)
             if pageCache.object(forKey: k as NSString) != nil || inflight[k] != nil { continue }
+            let gen = generation
             let task = Task<UIImage?, Never> { [weak self] in
                 let decoded = await Self.decodePage(comic: comic, index: index, maxPixelSize: maxPixelSize)
-                if let self, let decoded {
+                guard let self, self.generation == gen else { return decoded }
+                if let decoded {
                     self.pageCache.setObject(decoded, forKey: k as NSString)
                 }
-                self?.clearInflight(k)
+                self.clearInflight(k)
                 return decoded
             }
             inflight[k] = task
@@ -114,20 +122,22 @@ final class PageProvider: ObservableObject {
     // MARK: 页缩略图（缩略图跳页条）
 
     func thumbnail(comic: Comic, index: Int) async -> UIImage? {
-        let k = key(comic, index)
+        let k = baseKey(comic, index)
         if let hit = thumbCache.object(forKey: k as NSString) { return hit }
         if let running = inflight["thumb:" + k] { return await running.value }
 
+        let gen = generation
         let task = Task<UIImage?, Never> { [weak self] in
             let decoded = await Self.decodeThumb(comic: comic, index: index)
-            if let self, let decoded {
+            guard let self, self.generation == gen else { return decoded?.image }
+            if let decoded {
                 // 超过 512 KiB 的缩略图不缓存（对齐桌面版 protocol.ts）；成本 = 解码后占用
                 if decoded.jpegBytes <= Self.thumbCacheableMaxBytes {
                     let cost = decoded.image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
                     self.thumbCache.setObject(decoded.image, forKey: k as NSString, cost: cost)
                 }
             }
-            self?.clearInflight("thumb:" + k)
+            self.clearInflight("thumb:" + k)
             return decoded?.image
         }
         inflight["thumb:" + k] = task
@@ -138,15 +148,16 @@ final class PageProvider: ObservableObject {
 
     /// 缓存的裁边结果；nil 表示「已计算，不需要裁」
     func cachedCrop(comic: Comic, index: Int) -> CropInsets?? {
-        cropCache[key(comic, index)]
+        cropCache[baseKey(comic, index)]
     }
 
     /// 计算裁边（96px 采样；结果缓存 400 条，含「不需要裁」的否定结果）
     func cropInsets(comic: Comic, index: Int) async -> CropInsets? {
-        let k = key(comic, index)
+        let k = baseKey(comic, index)
         if let hit = cropCache[k] { return hit }
+        let gen = generation
         let insets = await Self.computeCropInsets(comic: comic, index: index)
-        remember(k, insets)
+        if generation == gen { remember(k, insets) }
         return insets
     }
 
@@ -164,6 +175,8 @@ final class PageProvider: ObservableObject {
     // MARK: 清理
 
     func clearAll() {
+        // 跨会话代际 +1：仍在解码的旧任务完成后不再回写/误删（见 generation 注释）
+        generation &+= 1
         pageCache.removeAllObjects()
         thumbCache.removeAllObjects()
         cropCache.removeAll()
@@ -180,7 +193,14 @@ final class PageProvider: ObservableObject {
         inflight[k] = nil
     }
 
-    private func key(_ comic: Comic, _ index: Int) -> String {
+    /// 页面图缓存键：含解码尺寸——prefetch 与显示的目标尺寸可能不同（缩放、
+    /// 跨模式），不含尺寸时先解码的小图会挡住后续需要的大图（欠采样模糊）
+    private func pageKey(_ comic: Comic, _ index: Int, _ maxPixelSize: Int) -> String {
+        "\(comic.id):\(index):\(maxPixelSize)"
+    }
+
+    /// 缩略图 / 裁边缓存的键（尺寸固定，无需含尺寸）
+    private func baseKey(_ comic: Comic, _ index: Int) -> String {
         "\(comic.id):\(index)"
     }
 }
