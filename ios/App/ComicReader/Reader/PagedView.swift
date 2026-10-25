@@ -110,6 +110,8 @@ struct PagedView: View {
             autoCrop: reader.autoCrop,
             onNatural: { w, h in
                 reader.markWide(index, isWide: isWideSize(width: w, height: h))
+                // 宽高比跨会话学习（滚动模式的占位高度/页内恢复要用）
+                if w > 0 { reader.applyRatio(index, ratio: h / w) }
             },
             onSettled: { settledPages.insert(index) }
         )
