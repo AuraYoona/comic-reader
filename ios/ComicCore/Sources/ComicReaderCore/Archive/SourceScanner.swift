@@ -213,6 +213,30 @@ public func readPageAsync(_ comic: Comic, index: Int) async throws -> PageBytes 
     }
 }
 
+/// 扫描来源的异步形态（open / rescan 用）：压缩包的 list() 内部经
+/// awaitBlocking 信号量等待，绝不能落在主线程或协作线程池上调用
+public func scanSourceAsync(sourceType: SourceType, sourcePath: String) async throws -> [String] {
+    try await withCheckedThrowingContinuation { continuation in
+        archiveReadQueue.async {
+            continuation.resume(with: Result {
+                try scanSource(sourceType: sourceType, sourcePath: sourcePath)
+            })
+        }
+    }
+}
+
+/// 把整段含阻塞归档操作的流程（如导入：scanSource + 封面条目读取都有
+/// awaitBlocking 信号量等待）派到专用 GCD 队列执行——调用方挂起等待。
+/// 这些信号量等待绝不能落在 Swift 协作线程池的线程上（池宽 ≈ 核数，
+/// 被占满后全局异步工作停摆）
+public func runOnArchiveQueue<T>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
+    try await withCheckedThrowingContinuation { continuation in
+        archiveReadQueue.async {
+            continuation.resume(with: Result { try body() })
+        }
+    }
+}
+
 /// 释放全部打开的压缩包句柄（进入后台时调用，对应桌面版的 before-quit）
 public func closeAllSources() {
     sharedArchiveRegistry.releaseAll()

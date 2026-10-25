@@ -276,4 +276,52 @@ final class LibraryDatabaseTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: paths.libraryPath))
         XCTAssertFalse(FileManager.default.fileExists(atPath: paths.libraryPath + ".tmp"), "临时文件应已改名")
     }
+
+    /// writeToDisk 写序守卫：先取得旧快照（seq 较小）的写盘因故迟到时，
+    /// 不得把新快照已写好的库文件覆盖回旧数据。
+    /// ioGate 在「快照已取得、写锁未取得」处制造交错窗口
+    func testStaleSnapshotSkipsOverNewerWrite() {
+        final class Gate: @unchecked Sendable {
+            private let lock = NSLock()
+            private var armed = true
+            private let entered = DispatchSemaphore(value: 0)
+            private let go = DispatchSemaphore(value: 0)
+            func call() {
+                lock.lock(); let first = armed; armed = false; lock.unlock()
+                guard first else { return }
+                entered.signal()
+                go.wait()
+            }
+            func waitEntered(timeout: TimeInterval) -> DispatchTimeoutResult {
+                entered.wait(timeout: .now() + timeout)
+            }
+            func release() { go.signal() }
+        }
+
+        let gate = Gate()
+        let db = LibraryDatabase(paths: paths, clock: manual.clock, now: { 0 }, ioGate: gate.call)
+        db.load()
+
+        func libraryText() -> String {
+            (try? String(contentsOfFile: paths.libraryPath, encoding: .utf8)) ?? ""
+        }
+
+        db.upsertComic(sampleComic(id: "old"))
+        let bgDone = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            db.flushSync() // writeToDisk #1：seq=1，停在 ioGate 上
+            bgDone.signal()
+        }
+        XCTAssertEqual(gate.waitEntered(timeout: 5), .success, "第一次写盘应到达注入点")
+
+        db.upsertComic(sampleComic(id: "new"))
+        db.flushSync() // writeToDisk #2：seq=2，直接完成写盘
+        XCTAssertEqual(db.writeCount, 1)
+        XCTAssertTrue(libraryText().contains("new"), "磁盘上应是新快照")
+
+        gate.release() // 放行 #1：seq=1 < lastWrittenSeq=2，必须跳过
+        XCTAssertEqual(bgDone.wait(timeout: .now() + 5), .success)
+        XCTAssertEqual(db.writeCount, 1, "迟到的旧快照必须被写序守卫跳过")
+        XCTAssertTrue(libraryText().contains("new"), "新快照不得被旧数据覆盖")
+    }
 }

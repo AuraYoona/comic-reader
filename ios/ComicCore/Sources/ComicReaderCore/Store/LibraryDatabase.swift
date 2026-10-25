@@ -14,16 +14,33 @@ public final class LibraryDatabase: @unchecked Sendable {
     public static let progressSaveDebounceSeconds: Double = 5.0
 
     private let lock = NSRecursiveLock()
+    /// 写盘互斥锁：只包「编码 + 写文件」，不嵌套数据库锁——此前整段落盘
+    /// 都持数据库锁，阅读中每 5s 的落盘窗口内主线程读写全部排队卡顿
+    private let ioLock = NSLock()
+    /// 写序号（snapshotSeq 在数据库锁下分配，lastWrittenSeq 在 ioLock 下比较）：
+    /// 防抖定时器与 flushSync 并发触发时，晚拿到锁的旧快照不得覆盖新快照
+    private var snapshotSeq = 0
+    private var lastWrittenSeq = 0
     private let paths: AppPaths
     private let saver: DebouncedSaver
     private let now: @Sendable () -> Double
     private var data: LibraryFile = LibraryFile()
 
     /// 供测试观察落盘次数
+    /// 测试注入点：writeToDisk 在「快照已取得、写锁未取得」处停留一下，
+    /// 用于制造两个写盘交错的窗口（验证写序守卫）。生产恒为 nil
+    private let ioGate: (@Sendable () -> Void)?
+
     public private(set) var writeCount: Int = 0
 
-    public init(paths: AppPaths, clock: DebouncedSaver.Clock = .live(), now: (@Sendable () -> Double)? = nil) {
+    public init(
+        paths: AppPaths,
+        clock: DebouncedSaver.Clock = .live(),
+        now: (@Sendable () -> Double)? = nil,
+        ioGate: (@Sendable () -> Void)? = nil
+    ) {
         self.paths = paths
+        self.ioGate = ioGate
         self.now = now ?? { Date().timeIntervalSince1970 * 1000 }
         self.saver = DebouncedSaver(clock: clock)
         // 全部存储属性就绪后再接写盘回调（避免 init 中捕获未完成的 self）
@@ -387,13 +404,24 @@ public final class LibraryDatabase: @unchecked Sendable {
     // MARK: 落盘
 
     private func writeToDisk() {
-        lock.lock(); defer { lock.unlock() }
         let filePath = paths.libraryPath
         guard !filePath.isEmpty else { return }
+
+        lock.lock()
+        snapshotSeq &+= 1
+        let seq = snapshotSeq
+        let snapshot = data
+        lock.unlock()
+
+        ioGate?()
+
+        ioLock.lock(); defer { ioLock.unlock() }
+        guard seq > lastWrittenSeq else { return }
+        lastWrittenSeq = seq
         do {
             let encoder = JSONEncoder()
             // 不做缩进：上千本时能省掉一半体积（与桌面版一致）
-            let json = try encoder.encode(data)
+            let json = try encoder.encode(snapshot)
             let tmp = filePath + ".tmp"
             try json.write(to: URL(fileURLWithPath: tmp))
             // 原子替换：先写临时文件再改名（对齐桌面版 fs.renameSync 语义：

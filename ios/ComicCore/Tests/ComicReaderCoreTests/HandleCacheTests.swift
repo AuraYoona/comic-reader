@@ -77,6 +77,28 @@ final class HandleCacheTests: XCTestCase {
         cache.releaseAll()
         XCTAssertEqual(Set(recorder.closed), ["a.cbz", "b.cbz"])
     }
+
+    /// 回归：空闲定时器的 handler 已在缓存队列上执行，若走 release 的
+    /// queue.sync 会向自身串行队列同步重入，队列永久死锁（此后该格式的
+    /// 全部读取挂起，直到杀进程）。旧实现表现为第二次 acquire 永不返回。
+    /// 等待 close 事件本身而非固定 sleep——不对赌 GCD 定时器的派发延迟
+    func testIdleReleaseDoesNotDeadlockQueue() {
+        let recorder = Recorder()
+        let cache = makeCache(recorder: recorder, idle: 0.1)
+        let done = expectation(description: "空闲释放后的 acquire 能正常完成")
+        Task {
+            _ = try? await cache.acquire("a.cbz")
+            // 轮询等空闲释放事件（上限由外层 wait 的 timeout 控制）
+            while !recorder.closed.contains("a.cbz") {
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+            _ = try? await cache.acquire("a.cbz")
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 10)
+        XCTAssertTrue(recorder.closed.contains("a.cbz"), "句柄应被空闲释放")
+        XCTAssertEqual(recorder.opened.count, 2, "释放后再取应重新打开")
+    }
 }
 
 // SourceScanner 门面的行为测试（folder 扫描 + 过滤 + 自然排序 + 重试语义）

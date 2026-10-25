@@ -68,6 +68,23 @@ public final class Importer: @unchecked Sendable {
         return results
     }
 
+    /// importPaths 的异步形态：整段流程派到归档专用 GCD 队列。importOne
+    /// 里的 scanSource 与封面条目读取都经 awaitBlocking 信号量等待，此前
+    /// 经 Task.detached 落在协作线程池上，阅读中触发导入会占死池线程
+    @discardableResult
+    public func importPathsAsync(
+        _ paths: [String],
+        progress: (@Sendable (ImportProgressInfo) -> Void)? = nil
+    ) async -> [ImportResult] {
+        (try? await runOnArchiveQueue { self.importPaths(paths, progress: progress) }) ?? []
+    }
+
+    /// scanLibraryRoots 的异步形态（理由同 importPathsAsync）
+    public func scanLibraryRootsAsync() async -> ScanRootsResult {
+        (try? await runOnArchiveQueue { self.scanLibraryRoots() })
+            ?? ScanRootsResult(roots: 0, added: [], unreadable: [])
+    }
+
     /// 导入单项；路径不存在 / 类型不支持 / 0 页都只失败这一项，不抛出
     private func importOne(_ rawPath: String, seenInBatch: inout Set<String>) -> ImportResult {
         let sourcePath = resolvePath(rawPath)
