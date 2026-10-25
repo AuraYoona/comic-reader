@@ -92,3 +92,43 @@ final class ChapterTests: XCTestCase {
         XCTAssertEqual(pages[chapters[1].startPage], "第02话/1.jpg")
     }
 }
+
+// stripDedupSuffix / remapPage：同名并入的辅助
+
+final class ImportMergeHelpersTests: XCTestCase {
+    func testStripDedupSuffix() {
+        XCTAssertEqual(stripDedupSuffix("漫画a"), "漫画a")
+        XCTAssertEqual(stripDedupSuffix("漫画a (2)"), "漫画a")
+        XCTAssertEqual(stripDedupSuffix("漫画a (12)"), "漫画a")
+        XCTAssertEqual(stripDedupSuffix("漫画a (2) (3)"), "漫画a")
+        // 目录名本身带 (3) 的（无空格前缀或非纯数字）不动
+        XCTAssertEqual(stripDedupSuffix("第3话(1)"), "第3话(1)")
+        XCTAssertEqual(stripDedupSuffix("卷 (上)"), "卷 (上)")
+    }
+
+    func testRemapPageFindsEntryAfterShift() {
+        // 新章节「第00话」插到前面：原第 2 页（第01话/1.jpg）平移到第 4 页
+        let old = ["第01话/1.jpg", "第01话/2.jpg", "第02话/1.jpg"]
+        let new = ["第00话/1.jpg", "第00话/2.jpg", "第01话/1.jpg", "第01话/2.jpg", "第02话/1.jpg"]
+        XCTAssertEqual(remapPage(0, old: old, new: new), 2)
+        XCTAssertEqual(remapPage(2, old: old, new: new), 4)
+    }
+
+    func testRemapPageAppendedKeepsIndex() {
+        let old = ["1.jpg", "2.jpg"]
+        let new = ["1.jpg", "2.jpg", "第02话/1.jpg"]
+        XCTAssertEqual(remapPage(1, old: old, new: new), 1)
+    }
+
+    func testRemapPageMissingEntryFallsBackToRatio() {
+        // 原条目消失：按比例近似
+        let old = (0..<10).map { "old\($0).jpg" }
+        let new = (0..<20).map { "new\($0).jpg" }
+        XCTAssertEqual(remapPage(5, old: old, new: new), 10)  // 5/10 → 10/20
+    }
+
+    func testRemapPageOutOfRangeClamps() {
+        XCTAssertEqual(remapPage(99, old: ["a"], new: ["a", "b"]), 1)
+        XCTAssertEqual(remapPage(0, old: ["a"], new: []), 0)
+    }
+}

@@ -176,15 +176,34 @@ final class ShelfStore: ObservableObject {
 
     // MARK: 导入
 
-    /// 导入一批沙盒内路径（文档选择器复制进来之后调用）；返回逐项结果
+    /// 导入一批沙盒内路径（文档选择器复制进来之后调用）；返回逐项结果。
+    /// 同名文件夹自动并入既有书目（见 mergeIncomingIntoExisting）
     @discardableResult
     func importPaths(_ paths: [String]) async -> [ImportResult] {
         guard !importing.active, !paths.isEmpty else { return [] }
         importing = ImportBusy(active: true, label: "正在导入", current: 0, total: paths.count, path: "")
 
+        // 同名并入：电脑端二次导入同名漫画（文件选择器 / 局域网对重名落盘
+        // 都会加「 (n)」后缀）时不再产生重复书目，而是把新内容作为章节合进
+        // 已有那本（目录自动按文件夹名生成）
+        var freshPaths: [String] = []
+        var mergedResults: [ImportResult] = []
+        for (i, path) in paths.enumerated() {
+            importing = ImportBusy(
+                active: true, label: "正在导入",
+                current: i + 1, total: paths.count,
+                path: (path as NSString).lastPathComponent
+            )
+            if let merged = await mergeIncomingIntoExisting(path) {
+                mergedResults.append(merged)
+            } else {
+                freshPaths.append(path)
+            }
+        }
+
         let importer = self.importer
         // 走归档专用队列（importPathsAsync）：detached 会把信号量等待留在协作池
-        let results: [ImportResult] = await importer.importPathsAsync(paths) { info in
+        let results: [ImportResult] = await importer.importPathsAsync(freshPaths) { info in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.importing.current = info.current
@@ -195,7 +214,85 @@ final class ShelfStore: ObservableObject {
         importing = .idle
         comics = db.listComics()
         summarizeImport(results)
-        return results
+        return mergedResults + results
+    }
+
+    /// 同名并入：incoming 是文件夹且去掉「 (n)」后缀后与既有文件夹书目同名 →
+    /// 把它的一级子项（章节）搬进既有书目目录，重扫刷新页数并按条目名平移
+    /// 阅读进度。同名子项视为同一章节跳过（重复发送的场景）。
+    /// 返回合成的导入回执（回执缺失会被传输界面标为失败）
+    private func mergeIncomingIntoExisting(_ path: String) async -> ImportResult? {
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return nil }
+        let stripped = stripDedupSuffix((path as NSString).lastPathComponent)
+        guard !stripped.isEmpty,
+              let existing = comics.first(where: {
+                  $0.sourceType == .folder
+                      && (($0.sourcePath as NSString).lastPathComponent == stripped || $0.title == stripped)
+              })
+        else { return nil }
+        // 既有书目目录不在了（来源丢失）→ 按普通导入处理
+        guard fm.fileExists(atPath: existing.sourcePath) else { return nil }
+        guard let children = try? fm.contentsOfDirectory(atPath: path).sorted() else { return nil }
+
+        var movedCount = 0
+        var skippedCount = 0
+        do {
+            for child in children {
+                let dest = existing.sourcePath + "/" + child
+                if fm.fileExists(atPath: dest) {
+                    skippedCount += 1 // 同名子项：视为同一章节，保留既有
+                    continue
+                }
+                if (try? fm.moveItem(atPath: path + "/" + child, toPath: dest)) != nil {
+                    movedCount += 1
+                } else {
+                    try fm.copyItem(atPath: path + "/" + child, toPath: dest)
+                    movedCount += 1
+                }
+            }
+            // 搬空的落盘目录清掉
+            if let left = try? fm.contentsOfDirectory(atPath: path), left.isEmpty {
+                try? fm.removeItem(atPath: path)
+            }
+        } catch {
+            toasts.show(.error, "并入《\(existing.title)》失败：\(error.localizedDescription)")
+            return nil
+        }
+        guard movedCount > 0 || skippedCount > 0 else { return nil }
+
+        // 重扫既有书目：页数刷新；新章节插在前面时按条目名平移进度
+        let oldList = (try? getPageList(existing)) ?? []
+        let oldPage = existing.lastReadPage
+        invalidateComic(existing.id)
+        var refreshed = existing
+        if let newList = try? await scanSourceAsync(sourceType: .folder, sourcePath: existing.sourcePath),
+           !newList.isEmpty {
+            refreshed = db.setPageCount(id: existing.id, pageCount: newList.count) ?? existing
+            if oldPage > 0, !oldList.isEmpty {
+                let mapped = remapPage(oldPage, old: oldList, new: newList)
+                if mapped != oldPage {
+                    refreshed = db.updateProgress(
+                        id: existing.id,
+                        patch: ProgressPatch(lastReadPage: mapped)
+                    ) ?? refreshed
+                }
+            }
+        }
+
+        toasts.show(
+            .success,
+            movedCount > 0
+                ? "《\(existing.title)》新增 \(movedCount) 个章节"
+                : "《\(existing.title)》章节已存在，未重复并入"
+        )
+        return ImportResult(
+            path: path,
+            status: .imported,
+            comic: refreshed,
+            reason: movedCount > 0 ? "并入同名书目" : "章节已存在"
+        )
     }
 
     /// 批量导入：一个根目录下每个子文件夹 / 压缩包各算一本（对齐 expandBatchRoot）
