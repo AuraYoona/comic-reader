@@ -237,6 +237,58 @@ public func runOnArchiveQueue<T>(_ body: @escaping @Sendable () throws -> T) asy
     }
 }
 
+/// 章节目录项：分章节文件夹（或压缩包内分章节目录）的漫画按首个路径段
+/// 分组得到的章节
+public struct ComicChapter: Equatable, Sendable {
+    /// 章节名（首个路径段）；根目录散页组成的章节为空串（界面显示「正文」）
+    public let title: String
+    /// 章节首页在整本页面列表中的下标（页面身份 = 过滤排序后列表的下标）
+    public let startPage: Int
+    public let pageCount: Int
+
+    public init(title: String, startPage: Int, pageCount: Int) {
+        self.title = title
+        self.startPage = startPage
+        self.pageCount = pageCount
+    }
+}
+
+/// 从自然排序后的页面条目推导章节目录。
+/// 规则：条目含 "/" 时首个路径段为章节名；不含的归入开头的无名章节。
+/// 按页面列表中的连续同名段切分（同名段不连续时成为两个章节）。
+/// 章节数不足 2 时返回空（没有目录可言）。
+public func deriveChapters(from pages: [String]) -> [ComicChapter] {
+    guard pages.contains(where: { $0.contains("/") }) else { return [] }
+
+    var out: [ComicChapter] = []
+    var currentTitle: String?
+    var count = 0
+
+    func flush(endedAt index: Int) {
+        if let title = currentTitle, count > 0 {
+            out.append(ComicChapter(title: title, startPage: index - count, pageCount: count))
+        }
+    }
+
+    for (i, entry) in pages.enumerated() {
+        let title: String
+        if let sep = entry.firstIndex(of: "/") {
+            title = String(entry[..<sep])
+        } else {
+            title = ""
+        }
+        if title != currentTitle {
+            flush(endedAt: i)
+            currentTitle = title
+            count = 0
+        }
+        count += 1
+    }
+    flush(endedAt: pages.count)
+
+    return out.count >= 2 ? out : []
+}
+
 /// 释放全部打开的压缩包句柄（进入后台时调用，对应桌面版的 before-quit）
 public func closeAllSources() {
     sharedArchiveRegistry.releaseAll()

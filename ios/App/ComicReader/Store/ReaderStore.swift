@@ -32,6 +32,8 @@ final class ReaderStore: ObservableObject {
     @Published private(set) var autoTurn = false
     @Published private(set) var thumbStrip = false
     @Published private(set) var endHint = false
+    /// 章节目录（分章节文件夹的漫画；章节数 < 2 时为空）
+    @Published private(set) var chapters: [ComicChapter] = []
 
     private let db: LibraryDatabase
     private let settings: SettingsStore
@@ -110,6 +112,8 @@ final class ReaderStore: ObservableObject {
         pageCount = list.count
         bookmarks = updated.bookmarks
         widePages = []
+        // 章节目录：从页面条目路径推导（首个路径段 = 章节名；< 2 章为空）
+        chapters = deriveChapters(from: list)
 
         // 偏好解析：按本覆盖全局（对齐 reader.ts open 151-187）
         let s = settings.settings
@@ -153,6 +157,7 @@ final class ReaderStore: ObservableObject {
         comic = nil
         page = 0
         pageCount = 0
+        chapters = []
         pageRatios = [:]
         restoreFraction = nil
         lastScrollFraction = nil
