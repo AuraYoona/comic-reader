@@ -198,6 +198,56 @@ final class ShelfStore: ObservableObject {
         return results
     }
 
+    func importBatchRoot(_ root: String) async {
+        let items = importer.expandBatchRoot(root)
+        guard let items, !items.isEmpty else {
+            toasts.show(.error, "这个目录里没有可导入的漫画")
+            return
+        }
+        _ = db.addLibraryRoot(root)
+        await importPaths(items)
+    }
+
+    /// 启动 / 手动扫描库目录：新增的漫画自动上架
+    func scanRoots(silent: Bool = false) async {
+        let importer = self.importer
+        let result: ScanRootsResult = await importer.scanLibraryRootsAsync()
+
+        comics = db.listComics()
+        if !result.added.isEmpty {
+            toasts.show(.success, "新上架 \(result.added.count) 本")
+        } else if !silent {
+            if result.roots == 0 {
+                toasts.show(.info, "还没有库目录，先批量导入一个目录吧")
+            } else {
+                toasts.show(.info, "库目录里没有新漫画")
+            }
+        }
+        if !result.unreadable.isEmpty {
+            toasts.show(.error, "有 \(result.unreadable.count) 个库目录读不了")
+        }
+    }
+
+    private func summarizeImport(_ results: [ImportResult]) {
+        let imported = results.filter { $0.status == .imported }.count
+        let skipped = results.filter { $0.status == .skipped }.count
+        let failed = results.filter { $0.status == .failed }
+
+        if imported > 0 {
+            toasts.show(.success, "已导入 \(imported) 本")
+        }
+        if skipped > 0 {
+            toasts.show(.info, "跳过 \(skipped) 本（已在书架或重复选择）")
+        }
+        // 失败原因最多提示 3 条（对齐 library.ts 103-121），其余合并展示
+        for item in failed.prefix(3) {
+            toasts.show(.error, item.reason ?? "导入失败")
+        }
+        if failed.count > 3 {
+            toasts.show(.error, "另有 \(failed.count - 3) 本导入失败")
+        }
+    }
+
     // MARK: 单本操作
 
     func remove(_ ids: [String]) {
