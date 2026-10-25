@@ -4,6 +4,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var reader: ReaderStore
+    @EnvironmentObject private var shelf: ShelfStore
 
     var body: some View {
         ZStack {
@@ -18,6 +19,10 @@ struct RootView: View {
             ToastOverlay()
         }
         .animation(.easeOut(duration: 0.18), value: reader.active)
+        .onChange(of: reader.active) { visible in
+            // 书架常驻在阅读器下面：关闭时刷新快照，进度/未读徽章才跟上
+            if !visible { shelf.refreshAfterReading() }
+        }
     }
 }
 

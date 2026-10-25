@@ -84,6 +84,13 @@ final class ShelfStore: ObservableObject {
         verifySources(force: true)
     }
 
+    /// 阅读器关闭后的轻量刷新：只重读列表。卡片的进度 / 未读徽章读的是
+    /// shelf.comics 快照——阅读期间的 lastReadAt 与进度写进了 DB，
+    /// 列表不重载就会一直显示旧状态（「读完仍显示未读」）
+    func refreshAfterReading() {
+        comics = db.listComics()
+    }
+
     /// 来源存在性校验（8s 节流；后台批量 stat）
     func verifySources(force: Bool = false) {
         let t = now()
