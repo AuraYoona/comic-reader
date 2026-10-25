@@ -107,11 +107,7 @@ struct SelectionBarView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        .background(
-            Capsule()
-                .fill(.regularMaterial)
-                .shadow(color: .black.opacity(0.22), radius: 16, y: 6)
-        )
+        .liquidGlass(in: Capsule(), shadowOpacity: 0.22)
         .padding(.horizontal, 14)
         .padding(.bottom, 14)
     }
